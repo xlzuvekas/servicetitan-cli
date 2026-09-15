@@ -1,0 +1,18 @@
+# Credentials - never commit these.
+.env
+
+# Your own settings, and anything the scripts generate from your live data.
+# These contain real customer names, employee names and revenue figures.
+config.json
+live_data.json
+dashboard.html
+demo_data.json
+
+# Your brand assets. Delete these lines if you want your logos version-controlled
+# in a PRIVATE repo; keep them if this repo is public or shared.
+brand/logo-light.png
+brand/logo-dark.png
+
+__pycache__/
+*.pyc
+.DS_Store

@@ -1,0 +1,1643 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Operations Dashboard</title>
+<!-- No web font is loaded by default: shipping someone else's typeface would be
+     a branding decision this template has no business making, and it keeps the
+     page working offline. See BRANDING.md to add yours. -->
+<style>
+  /* ==================================================================
+     THEME TOKENS -- this block is what you edit to brand the dashboard.
+     Everything else styles itself from these. See BRANDING.md.
+
+     The chart colours are not arbitrary. Each was checked against the
+     measurable accessibility criteria for categorical palettes: an OKLCH
+     lightness band, a chroma floor, colour-blind separation (protan and
+     deutan simulation) between neighbouring hues, a normal-vision floor,
+     and WCAG contrast against its own surface. Both the light and dark
+     sets pass on their own surface -- dark is a separate set, not an
+     automatic inversion of light.
+
+     If you swap these for brand colours, re-run that check rather than
+     trusting your eye. BRANDING.md includes the validator and how to use it.
+     ================================================================== */
+  :root {
+    color-scheme: light;
+
+    --font-display: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --font-body:    system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+
+    --page:            #f5f6f7;
+    --surface-1:       #ffffff;
+    --surface-2:       #edeff1;
+    --text-primary:    #14171a;
+    --text-secondary:  #55595e;
+    --text-muted:      #6e737a;
+    --gridline:        #e0e3e6;
+    --baseline:        #c9ced3;
+    --border:          #d9dde1;
+
+    /* categorical series -- fixed order, never cycled */
+    --series-1: #2996f4;
+    --series-2: #ed6d28;
+    --series-3: #2ca67c;
+    --series-4: #8e2af1;
+    --series-5: #b39128;
+
+    /* status -- reserved, never reused as a series; always paired with a label */
+    --good:     #15803d;
+    --warning:  #a16207;
+    --serious:  #c2410c;
+    --critical: #b3261e;
+    --good-bg:     rgba(21,128,61,0.12);
+    --warning-bg:  rgba(161,98,7,0.13);
+    --serious-bg:  rgba(194,65,12,0.12);
+    --critical-bg: rgba(179,38,30,0.11);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --page:            #0f1113;
+      --surface-1:       #15171a;
+      --surface-2:       #1d2024;
+      --text-primary:    #ffffff;
+      --text-secondary:  #ccd1d6;
+      --text-muted:      #949aa1;
+      --gridline:        #2a2e33;
+      --baseline:        #3b4147;
+      --border:          rgba(255,255,255,0.14);
+      --series-1: #2996f4; --series-2: #e86b27; --series-3: #2ead82;
+      --series-4: #8e2af1; --series-5: #af8e27;
+      --good: #4ade80; --warning: #fbbf24; --serious: #fb923c; --critical: #fb7185;
+      --good-bg: rgba(74,222,128,0.15); --warning-bg: rgba(251,191,36,0.15);
+      --serious-bg: rgba(251,146,60,0.15); --critical-bg: rgba(251,113,133,0.15);
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --page:            #0f1113;
+    --surface-1:       #15171a;
+    --surface-2:       #1d2024;
+    --text-primary:    #ffffff;
+    --text-secondary:  #ccd1d6;
+    --text-muted:      #949aa1;
+    --gridline:        #2a2e33;
+    --baseline:        #3b4147;
+    --border:          rgba(255,255,255,0.14);
+    --series-1: #2996f4; --series-2: #e86b27; --series-3: #2ead82;
+    --series-4: #8e2af1; --series-5: #af8e27;
+    --good: #4ade80; --warning: #fbbf24; --serious: #fb923c; --critical: #fb7185;
+    --good-bg: rgba(74,222,128,0.15); --warning-bg: rgba(251,191,36,0.15);
+    --serious-bg: rgba(251,146,60,0.15); --critical-bg: rgba(251,113,133,0.15);
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin:0; padding:0; }
+  body {
+    background: var(--page);
+    color: var(--text-primary);
+    font-family: var(--font-body);
+    -webkit-font-smoothing: antialiased;
+  }
+  h1,h2,h3, .display { font-family: var(--font-display); letter-spacing: 0.01em; }
+  .tabular { font-variant-numeric: tabular-nums; }
+
+  a { color: inherit; }
+
+  /* ---------- header ---------- */
+  header.top {
+    position: sticky; top: 0; z-index: 30;
+    background: var(--page);
+    border-bottom: 1px solid var(--border);
+  }
+  .top-inner {
+    max-width: 1320px; margin: 0 auto; padding: 14px 20px 0;
+    display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap;
+  }
+  .brand { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+  .brand-logo { height: 38px; width: auto; display: block; flex: none; }
+  /* Used when no logo file is present: the company name set as a wordmark. */
+  .brand-wordmark {
+    font-family: var(--font-display); font-size: 20px; font-weight: 700;
+    letter-spacing: -0.01em; color: var(--text-primary); white-space: nowrap;
+  }
+  /* Demo-data banner. Deliberately loud -- demo figures must never be mistaken
+     for a real reading of the business. */
+  .demo-banner {
+    background: var(--warning-bg); color: var(--warning);
+    border-bottom: 1px solid var(--border);
+    font-size: 12.5px; font-weight: 600; text-align: center; padding: 7px 20px;
+  }
+  .brand-rule { width: 1px; align-self: stretch; min-height: 26px; background: var(--border); }
+  .brand .sub { margin: 0; font-size: 12.5px; color: var(--text-secondary); }
+  /* Two lockups: the full-colour mark for light grounds, a lightened build of the
+     same artwork for dark ones. Swapped by theme rather than filtered, so the
+     brand blue and red stay true instead of being washed out by a CSS filter. */
+  .dark-only { display: none; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .light-only { display: none; }
+    :root:not([data-theme="light"]) .dark-only  { display: block; }
+  }
+  :root[data-theme="dark"]  .light-only { display: none; }
+  :root[data-theme="dark"]  .dark-only  { display: block; }
+  :root[data-theme="light"] .light-only { display: block; }
+  :root[data-theme="light"] .dark-only  { display: none; }
+  .visually-hidden {
+    position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0;
+    overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+  }
+  /* Data-freshness badge: green while the feed is current, amber once the last
+     refresh is old enough that the numbers may no longer reflect the board. */
+  .sample-badge {
+    font-size: 11.5px; font-weight: 600; color: var(--good);
+    background: var(--good-bg); border-radius: 999px; padding: 5px 10px 5px 8px;
+    display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
+  }
+  .sample-badge .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--good); }
+  .sample-badge.stale { color: var(--warning); background: var(--warning-bg); }
+  .sample-badge.stale .dot { background: var(--warning); }
+
+  .filterbar {
+    max-width: 1320px; margin: 0 auto; padding: 12px 20px;
+    display: flex; align-items: center; gap: 18px; flex-wrap: wrap;
+  }
+  .seg {
+    display: inline-flex; background: var(--surface-2); border-radius: 9px; padding: 3px; gap: 2px;
+  }
+  .seg button {
+    font: inherit; font-size: 12.5px; font-weight: 600; color: var(--text-secondary);
+    border: none; background: transparent; padding: 6px 12px; border-radius: 7px; cursor: pointer;
+  }
+  .seg button.active { background: var(--surface-1); color: var(--text-primary); box-shadow: 0 1px 2px var(--border); }
+  .filter-group { display: flex; align-items: center; gap: 8px; }
+  .filter-label { font-size: 11.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); }
+  input[type="date"] {
+    font: inherit; font-size: 12.5px; color: var(--text-primary); background: var(--surface-2);
+    border: 1px solid var(--border); border-radius: 7px; padding: 5px 8px;
+  }
+  .custom-range { display: none; align-items: center; gap: 6px; }
+  .custom-range.show { display: flex; }
+
+  nav.tabs {
+    max-width: 1320px; margin: 0 auto; padding: 0 20px;
+    display: flex; gap: 4px; overflow-x: auto;
+  }
+  nav.tabs button {
+    font: inherit; font-family: var(--font-display); font-size: 14.5px; font-weight: 600;
+    color: var(--text-secondary); background: transparent; border: none; cursor: pointer;
+    padding: 9px 14px 11px; border-bottom: 2.5px solid transparent; white-space: nowrap;
+  }
+  nav.tabs button.active { color: var(--text-primary); border-bottom-color: var(--series-1); }
+  nav.tabs button:hover { color: var(--text-primary); }
+
+  main { max-width: 1320px; margin: 0 auto; padding: 20px 20px 64px; }
+  .panel { display: none; }
+  .panel.active { display: block; }
+
+  /* ---------- generic layout ---------- */
+  .kpi-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 16px; }
+  .grid-2 { display: grid; grid-template-columns: 1.3fr 1fr; gap: 12px; margin-bottom: 16px; }
+  .grid-2b { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+  @media (max-width: 860px) { .grid-2, .grid-2b { grid-template-columns: 1fr; } }
+
+  .card {
+    background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px;
+    padding: 16px 18px;
+  }
+  .card h3 { margin: 0 0 2px; font-size: 15px; font-weight: 600; }
+  .card .card-sub { margin: 0 0 12px; font-size: 12px; color: var(--text-muted); }
+  .card-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 2px;}
+
+  .stat-tile { background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; }
+
+  /* Year-to-date context band: always present regardless of the range filter, so
+     the selected window is never read without the full-year number beside it.
+     Deliberately quieter than the primary tiles -- it is context, not the answer. */
+  .context-band {
+    background: var(--surface-2); border: 1px solid var(--border); border-radius: 12px;
+    padding: 12px 16px; margin-bottom: 16px;
+    display: flex; align-items: center; gap: 26px; flex-wrap: wrap;
+  }
+  .context-band .band-label {
+    font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;
+    color: var(--text-muted); white-space: nowrap;
+  }
+  .context-band .band-label .band-note { display:block; font-weight:500; text-transform:none; letter-spacing:0; margin-top:2px; }
+  .context-band .band-stat { display: flex; flex-direction: column; gap: 2px; }
+  .context-band .band-stat .k { font-size: 11px; color: var(--text-muted); font-weight: 600; }
+  .context-band .band-stat .v { font-size: 17px; font-weight: 700; font-family: var(--font-display); line-height: 1.1; }
+  .stat-label { font-size: 11.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); margin-bottom: 6px; }
+  .stat-value { font-size: 26px; font-weight: 700; line-height: 1.05; font-family: var(--font-display); }
+  .stat-meta { margin-top: 5px; font-size: 12px; color: var(--text-secondary); display:flex; align-items:center; gap:6px; }
+  .delta-up { color: var(--good); font-weight: 600; }
+  .delta-down { color: var(--critical); font-weight: 600; }
+  .stat-target { margin-top: 8px; }
+  .meter-track { height: 6px; border-radius: 4px; background: var(--surface-2); overflow: hidden; }
+  .meter-fill { height: 100%; border-radius: 4px; }
+
+  /* A stat tile that can be opened to reveal the records behind it. Reads as a
+     plain tile until hover, so the KPI row stays calm. */
+  button.stat-tile {
+    font: inherit; text-align: left; width: 100%; cursor: pointer;
+    transition: border-color .12s, box-shadow .12s, transform .12s;
+  }
+  button.stat-tile:hover { border-color: var(--series-1); box-shadow: 0 2px 10px rgba(0,0,0,0.06); transform: translateY(-1px); }
+  button.stat-tile:focus-visible { outline: 2px solid var(--series-1); outline-offset: 2px; }
+  button.stat-tile.open { border-color: var(--series-1); box-shadow: inset 0 0 0 1px var(--series-1); }
+  .stat-drill-hint {
+    margin-top: 8px; font-size: 11px; font-weight: 600; color: var(--series-1);
+    display: flex; align-items: center; gap: 4px; opacity: 0; transition: opacity .12s;
+  }
+  button.stat-tile:hover .stat-drill-hint, button.stat-tile:focus-visible .stat-drill-hint,
+  button.stat-tile.open .stat-drill-hint { opacity: 1; }
+
+  /* Detail layer for a drilled-into metric. Recessed rather than raised, so it
+     reads as "inside" the number above it rather than as a competing card. */
+  .drill {
+    background: var(--surface-2); border: 1px solid var(--border); border-radius: 12px;
+    padding: 16px 18px; margin-top: 16px;
+    scroll-margin-top: 150px;   /* clears the sticky header when scrolled to */
+  }
+  .drill-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 12px; }
+  .drill-head h3 { margin: 0 0 2px; font-size: 15px; font-weight: 600; }
+  .drill-close {
+    font: inherit; font-size: 12px; font-weight: 600; color: var(--text-secondary);
+    background: var(--surface-1); border: 1px solid var(--border); border-radius: 8px;
+    padding: 5px 11px; cursor: pointer; white-space: nowrap;
+  }
+  .drill-close:hover { color: var(--text-primary); border-color: var(--baseline); }
+  .drill table.dtable th { position: sticky; top: 0; background: var(--surface-2); z-index: 1; }
+  /* Year-to-date figures sit on a different clock from the rest of the row, so
+     they are set apart in secondary ink. Scoped to the cells that opt in via the
+     span -- a positional selector would tint the last columns of every table. */
+  .ytd-col { color: var(--text-secondary); }
+  .drill .won-yes { color: var(--good); font-weight: 600; }
+  .drill .won-no { color: var(--text-muted); }
+
+  .pill { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; font-weight: 600; padding: 3px 9px; border-radius: 999px; }
+  .pill .dot { width: 6px; height: 6px; border-radius: 50%; }
+  .pill.good { color: var(--good); background: var(--good-bg); }
+  .pill.warning { color: var(--warning); background: var(--warning-bg); }
+  .pill.serious { color: var(--serious); background: var(--serious-bg); }
+  .pill.critical { color: var(--critical); background: var(--critical-bg); }
+  .pill .dot.good { background: var(--good); } .pill .dot.warning { background: var(--warning); }
+  .pill .dot.serious { background: var(--serious); } .pill .dot.critical { background: var(--critical); }
+
+  .legend { display: flex; gap: 14px; flex-wrap: wrap; margin: 2px 0 10px; }
+  .legend-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-secondary); }
+  .legend-swatch { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+
+  table.dtable { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table.dtable th, table.dtable td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--gridline); }
+  table.dtable th { font-size: 11px; text-transform: uppercase; letter-spacing: 0.03em; color: var(--text-muted); font-weight: 600; white-space: nowrap; }
+  table.dtable td.num, table.dtable th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  table.dtable tbody tr:hover { background: var(--surface-2); }
+  .table-wrap { overflow-x: auto; }
+  .table-scroll { max-height: 360px; overflow-y: auto; }
+
+  /* Tooltip is a small surface card rather than an inverted block, so it reads
+     as part of the page and stays legible in both themes. */
+  .tooltip {
+    position: fixed; pointer-events: none; z-index: 100;
+    background: var(--surface-1); color: var(--text-primary);
+    border: 1px solid var(--border); border-radius: 10px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.14), 0 2px 6px rgba(0,0,0,0.08);
+    font-size: 12px; line-height: 1.45; padding: 9px 11px; min-width: 150px; max-width: 280px;
+    opacity: 0; transform: translate(-9999px,-9999px); transition: opacity .09s;
+  }
+  .tooltip.show { opacity: 1; }
+  .tooltip b { font-weight: 700; }
+  .tt-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
+    color: var(--text-muted); margin-bottom: 6px; }
+  .tt-row { display: flex; align-items: center; gap: 8px; padding: 2px 0; }
+  .tt-sw { width: 8px; height: 8px; border-radius: 2px; flex: none; }
+  .tt-name { color: var(--text-secondary); }
+  .tt-val { margin-left: auto; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .tt-total { margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--gridline); }
+
+  .section-title { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-secondary); margin: 22px 0 10px; }
+  .section-title:first-child { margin-top: 0; }
+
+  .foot { max-width: 1320px; margin: 0 auto; padding: 10px 20px 40px; font-size: 12px; color: var(--text-muted); }
+
+  svg text { fill: var(--text-secondary); font-family: var(--font-body); }
+  .axis-label { fill: var(--text-muted); font-size: 10.5px; }
+  .gridline { stroke: var(--gridline); stroke-width: 1; stroke-dasharray: 3 4; }
+  .hover-band { fill: transparent; cursor: pointer; }
+  .xg { opacity: 0; transition: opacity .08s; }
+  .hover-band:hover + .xg { opacity: 1; }
+  .xg .xline { stroke: var(--baseline); stroke-width: 1; stroke-dasharray: 3 3; }
+  .xg .xdot { stroke: var(--surface-1); stroke-width: 2; }
+  .baseline { stroke: var(--baseline); stroke-width: 1; }
+  .bar-rect { cursor: pointer; }
+  .bar-rect:hover { opacity: 0.85; }
+  .bar-rect.drillable { pointer-events: none; }  /* the transparent hit strip behind it takes the click */
+  .line-path { fill: none; stroke-width: 2; }
+  .area-path { opacity: 0.16; }
+  .dot-marker { cursor: pointer; }
+  .crosshair { stroke: var(--baseline); stroke-width: 1; pointer-events:none; }
+</style>
+</head>
+<body>
+
+<div class="tooltip" id="tooltip"></div>
+
+<header class="top">
+  <div class="top-inner">
+    <div class="brand">
+      <h1 class="visually-hidden" id="srTitle"></h1>
+      <img class="brand-logo light-only" id="logoLight" alt="" hidden src="data:image/png;base64,__LOGO_LIGHT__">
+      <img class="brand-logo dark-only" id="logoDark" alt="" aria-hidden="true" hidden src="data:image/png;base64,__LOGO_DARK__">
+      <span class="brand-wordmark" id="wordmark" hidden></span>
+      <span class="brand-rule" aria-hidden="true"></span>
+      <p class="sub" id="brandSub"></p>
+    </div>
+    <span class="sample-badge" id="dataStatusBadge"><span class="dot"></span>Loading data status…</span>
+  </div>
+  <div class="filterbar">
+    <div class="filter-group">
+      <span class="filter-label">Location</span>
+      <div class="seg" id="locSeg"></div>
+    </div>
+    <div class="filter-group">
+      <span class="filter-label">Range</span>
+      <div class="seg" id="rangeSeg">
+        <button data-range="MTD" class="active">MTD</button>
+        <button data-range="QTD">QTD</button>
+        <button data-range="YTD">YTD</button>
+        <button data-range="CUSTOM">Custom</button>
+      </div>
+    </div>
+    <div class="filter-group custom-range" id="customRange">
+      <input type="date" id="customStart">
+      <span class="filter-label" style="text-transform:none;font-weight:400;">to</span>
+      <input type="date" id="customEnd">
+    </div>
+  </div>
+  <nav class="tabs" id="tabNav"></nav>
+</header>
+
+<main id="main"></main>
+
+<div class="foot" id="footNote"></div>
+
+<script id="app-config" type="application/json">
+__CONFIG_JSON__
+</script>
+<script id="live-data-json" type="application/json">
+__LIVE_DATA_JSON__
+</script>
+
+<script>
+/* =========================================================================
+   SERVICETITAN OPERATIONS DASHBOARD
+   Structure: constants -> RNG/data generation -> filtering & aggregation
+   -> chart primitives -> tab renderers -> app shell / events
+   ========================================================================= */
+
+/* ---------------------------- constants -------------------------------- */
+const LIVE_DATA = JSON.parse(document.getElementById("live-data-json").textContent);
+// Everything company-specific -- name, locations, targets, thresholds -- comes
+// from config.json via render_dashboard.py. Nothing below hardcodes a business.
+const CONFIG = JSON.parse(document.getElementById("app-config").textContent);
+const TARGETS = CONFIG.targets || {};
+const TODAY = new Date(); // real current time -- this is a periodically-refreshed live artifact, not a frozen snapshot
+const LOCATIONS = (CONFIG.locations || []).map(l => ({ id: l.code, name: l.label }));
+const DEPTS = ["Service", "Install", "Sales"];
+
+// Real technicians from ServiceTitan (both tenants). `dept` reflects the tech's
+// assigned business unit and is null for staff without one (e.g. admins who
+// occasionally appear in the Technicians list) -- techName() lookups don't need it.
+const TECHS = LIVE_DATA.technicians.map(t => ({ id: t.id, name: t.name, loc: t.loc, dept: t.dept }));
+/* ---------------------------------------------------------------------
+   Everything below binds straight to LIVE_DATA from ServiceTitan. All ids
+   are namespaced by location ("ESC:5510") because the two tenants reuse the
+   same raw id numbers -- see fetch_dashboard_data.py.
+   --------------------------------------------------------------------- */
+
+// name lookup for anyone who can be credited on a job, estimate, call, or
+// membership -- merges technicians and office employees across both tenants.
+const PEOPLE = LIVE_DATA.people || {};
+
+const CAMPAIGNS = LIVE_DATA.campaigns;
+const CAMPAIGN_BY_ID = new Map(CAMPAIGNS.map(c => [c.id, c]));
+
+function addDays(d, n) { const r = new Date(d); r.setDate(r.getDate() + n); return r; }
+function dkey(d) { return d.toISOString().slice(0,10); }
+
+// Jobs: completed jobs are dated by completedOn; booked jobs by their next
+// future appointment. Revenue, tech, membershipSold, options and lowTicket are
+// all derived server-side -- see fetch_dashboard_data.py for the rules.
+const JOBS = LIVE_DATA.jobs.map(j => ({
+  id: j.id, date: new Date(j.date), loc: j.loc, dept: j.dept, tech: j.tech,
+  revenue: j.revenue, future: j.future, membershipSold: j.membershipSold,
+  options: j.options, lowTicket: j.lowTicket, campaign: j.campaign
+}));
+
+// Opportunities drive the Sales tab -- NOT raw estimates. A Good/Better/Best
+// presentation writes one estimate per option for what is a single sales
+// opportunity, so estimate counts overstate how many chances to sell there
+// really were. These are pre-grouped one-per-job by fetch_dashboard_data.py;
+// `options` records how many estimates were folded into each.
+const OPPORTUNITIES = LIVE_DATA.opportunities.map(o => ({
+  id: o.id, loc: o.loc, dept: o.dept, won: !!o.won, options: o.options,
+  owner: o.owner, value: o.value || 0, topOption: o.topOption || 0,
+  // carried for the drill-down: who it was for, what was quoted, and the job
+  // number so a row can be found again in ServiceTitan itself
+  customer: o.customer, city: o.city, jobNumber: o.jobNumber, title: o.title,
+  presentedOn: o.presentedOn ? new Date(o.presentedOn) : null,
+  wonOn: o.wonOn ? new Date(o.wonOn) : null
+}));
+const ESTIMATE_COUNT = LIVE_DATA.estimateCount || 0;
+
+// Open receivables. Aging runs from the invoice due date (falling back to the
+// invoice date) -- days past due, not days since issued.
+const AR_INVOICES = LIVE_DATA.ar.map(i => {
+  const basis = new Date(i.dueDate || i.invoiceDate);
+  return {
+    id: i.id, loc: i.loc, customer: i.customer, businessUnit: i.businessUnit,
+    date: basis, amount: i.balance,
+    daysAgo: Math.max(0, Math.floor((TODAY - basis) / 86400000))
+  };
+});
+function arBucket(daysAgo){
+  if (daysAgo <= 30) return "0–30";
+  if (daysAgo <= 60) return "31–60";
+  if (daysAgo <= 90) return "61–90";
+  if (daysAgo <= 120) return "91–120";
+  return "120+";
+}
+const AR_BUCKETS = ["0–30","31–60","61–90","91–120","120+"];
+const AR_BUCKET_STATUS = { "0–30":"good", "31–60":"warning", "61–90":"serious", "91–120":"serious", "120+":"critical" };
+
+// Only OPEN purchase orders are sent (Received/Canceled are closed out and were
+// ~85% of the payload). POTALS carries the all-status count per location so the
+// dashboard can still say "N of M".
+const PURCHASE_ORDERS = LIVE_DATA.purchaseOrders.map(p => ({
+  id: p.id, loc: p.loc, vendor: p.vendor, status: p.status,
+  amount: p.total, date: p.date ? new Date(p.date) : null
+}));
+const PO_TOTALS = LIVE_DATA.poTotals || {};
+
+// Calls arrive pre-rolled-up: one row per (day, agent, campaign, direction)
+// carrying n / booked / abandoned counts. The dashboard only ever shows call
+// counts, so this is lossless -- see fetch_dashboard_data.py. Every consumer
+// must SUM c.n rather than counting rows.
+const CALLS = LIVE_DATA.calls.map(c => ({
+  loc: c.loc, date: new Date(c.date + "T12:00:00"), // midday avoids UTC/local day-boundary drift
+  agentName: c.agentName, campaign: c.campaign,
+  inbound: !!c.inbound, n: c.n, booked: c.booked, abandoned: c.abandoned
+}));
+
+const MEMBERSHIPS = LIVE_DATA.memberships.map(m => ({
+  id: m.id, loc: m.loc, status: m.status, plan: m.type, soldBy: m.soldBy,
+  startDate: m.from ? new Date(m.from) : null,
+  renewDate: m.to ? new Date(m.to) : null,
+  active: m.status === "Active"
+}));
+
+/* --------------------------- date range logic --------------------------- */
+function quarterStart(d){ const q = Math.floor(d.getMonth()/3); return new Date(d.getFullYear(), q*3, 1); }
+function currentRange(kind){
+  if (kind === "MTD") return [new Date(TODAY.getFullYear(), TODAY.getMonth(), 1), TODAY];
+  if (kind === "QTD") return [quarterStart(TODAY), TODAY];
+  if (kind === "YTD") return [new Date(TODAY.getFullYear(), 0, 1), TODAY];
+  return null;
+}
+function previousComparableRange(kind, start, end){
+  const spanMs = end - start;
+  const prevEnd = addDays(start, -1);
+  const prevStart = new Date(prevEnd.getTime() - spanMs);
+  return [prevStart, prevEnd];
+}
+
+const state = { loc: "ALL", range: "MTD", customStart: addDays(TODAY,-30), customEnd: TODAY, tab: "revenue",
+  // Which metric is currently drilled into, e.g. "presented". Null = none open.
+  drill: null };
+
+function activeDateRange(){
+  if (state.range === "CUSTOM") return [state.customStart, state.customEnd];
+  return currentRange(state.range);
+}
+// Year to date is shown alongside whatever range is selected, so the filtered
+// view is never read without the full-year number next to it.
+function ytdRange(){ return [new Date(TODAY.getFullYear(), 0, 1), TODAY]; }
+function inRange(d, start, end){ return d >= start && d <= end; }
+function locMatch(loc){ return state.loc === "ALL" || loc === state.loc; }
+
+// Pick a time-series bucket size so long ranges (QTD/YTD) don't render as
+// unreadable daily noise — same idea as choosing the chart form, applied to resolution.
+function chooseGranularity(start, end){
+  const days = (end - start) / 86400000;
+  if (days <= 48) return "day";
+  if (days <= 150) return "week";
+  return "month";
+}
+function bucketDate(d, gran){
+  if (gran === "day") return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  if (gran === "week") {
+    const dt = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    const day = dt.getDay();
+    const diff = (day === 0 ? -6 : 1 - day); // back up to Monday
+    dt.setDate(dt.getDate() + diff);
+    return dt;
+  }
+  return new Date(d.getFullYear(), d.getMonth(), 1);
+}
+
+/* ------------------------------ formatting ------------------------------ */
+const fmtUSD0 = n => "$" + Math.round(n).toLocaleString("en-US");
+const fmtUSD1 = n => "$" + n.toLocaleString("en-US", {maximumFractionDigits:1});
+const fmtPct = n => n.toFixed(1) + "%";
+const fmtNum = n => Math.round(n).toLocaleString("en-US");
+const fmtDate = d => d.toLocaleDateString("en-US", { month:"short", day:"numeric" });
+const fmtDateFull = d => d.toLocaleDateString("en-US", { month:"short", day:"numeric", year:"numeric" });
+
+/* ------------------------------- tooltip --------------------------------- */
+const tooltipEl = document.getElementById("tooltip");
+function showTooltip(evt, html){
+  tooltipEl.innerHTML = html;
+  tooltipEl.classList.add("show");
+  positionTooltip(evt);
+}
+function positionTooltip(evt){
+  const pad = 14;
+  let x = evt.clientX + pad, y = evt.clientY + pad;
+  const rect = tooltipEl.getBoundingClientRect();
+  if (x + rect.width > window.innerWidth) x = evt.clientX - rect.width - pad;
+  if (y + rect.height > window.innerHeight) y = evt.clientY - rect.height - pad;
+  tooltipEl.style.transform = `translate(${x}px,${y}px)`;
+}
+function hideTooltip(){ tooltipEl.classList.remove("show"); }
+
+/* ============================ CHART PRIMITIVES =========================== */
+
+// Horizontal / vertical bar chart. series: [{key,label,color}]; data: [{label, [key]:val, ...}]
+function barChart(opts){
+  const { data, series, width=560, height=null, horizontal=true, valueFmt=fmtUSD0, sequential=false } = opts;
+  const barGap = 10;
+  const barThick = horizontal ? 20 : 26;
+  const groupCount = data.length;
+  const h = height || (horizontal ? groupCount * (barThick*series.length + (series.length>1?4:0) + barGap) + 30 : 260);
+  const margin = horizontal ? {top:8,right:46,bottom:8,left:130} : {top:16,right:10,bottom:34,left:44};
+  const plotW = width - margin.left - margin.right;
+  const plotH = h - margin.top - margin.bottom;
+  const maxVal = Math.max(1, ...data.flatMap(row => series.map(s => row[s.key]||0)));
+
+  let svg = `<svg viewBox="0 0 ${width} ${h}" width="100%" height="${h}" role="img">`;
+  if (horizontal) {
+    const rowH = plotH / groupCount;
+    const labelReserve = 82; // keeps the value label from clipping past the SVG edge
+    const barMaxW = Math.max(20, plotW - labelReserve);
+    data.forEach((row, gi) => {
+      const gy = margin.top + gi*rowH;
+      series.forEach((s, si) => {
+        const val = row[s.key] || 0;
+        const bw = (val/maxVal) * barMaxW;
+        const by = gy + si*(barThick+3) + (rowH - series.length*(barThick+3))/2;
+        // row.color lets a caller paint a bar by what it MEANS (AR aging buckets use
+        // their status colour); otherwise one colour for the whole series.
+        const color = row.color || (sequential ? `var(--series-1)` : `var(--series-${s.colorIdx||si+1})`);
+        // A short bar is a tiny click target, so a transparent full-width strip
+        // sits behind it and carries the drill instead.
+        const dAttr = row.drill ? ` data-drill="${escAttr(row.drill)}"` : "";
+        if (row.drill) svg += `<rect${dAttr} x="${margin.left}" y="${by}" width="${barMaxW}" height="${barThick}" rx="4" fill="transparent" style="cursor:pointer"></rect>`;
+        svg += `<rect class="bar-rect${row.drill?" drillable":""}"${dAttr} data-tip="${escAttr(`<div class="tt-title">${row.label}</div><div class="tt-row"><span class="tt-sw" style="background:${color}"></span><span class="tt-name">${s.label}</span><span class="tt-val">${valueFmt(val)}</span></div>`)}" x="${margin.left}" y="${by}" width="${Math.max(bw,2)}" height="${barThick}" rx="4" fill="${color}"></rect>`;
+        if (series.length===1) svg += `<text x="${margin.left - 8}" y="${by + barThick/2 + 4}" text-anchor="end" font-size="12" style="pointer-events:none">${escXML(row.label)}</text>`;
+        if (si === series.length-1) svg += `<text x="${margin.left + bw + 8}" y="${by + barThick/2 + 4}" font-size="11.5" font-weight="600" class="tabular" style="pointer-events:none">${escXML(valueFmt(val))}</text>`;
+      });
+      if (series.length>1) svg += `<text x="${margin.left - 8}" y="${gy + rowH/2 + 4}" text-anchor="end" font-size="12">${escXML(row.label)}</text>`;
+    });
+  } else {
+    const colW = plotW / groupCount;
+    // gridlines
+    const gridN = 4;
+    for (let i=0;i<=gridN;i++){
+      const gy = margin.top + plotH - (i/gridN)*plotH;
+      svg += `<line class="gridline" x1="${margin.left}" x2="${width-margin.right}" y1="${gy}" y2="${gy}"></line>`;
+      svg += `<text class="axis-label" x="${margin.left-6}" y="${gy+3}" text-anchor="end">${valueFmt(maxVal*i/gridN)}</text>`;
+    }
+    data.forEach((row, gi) => {
+      const gx = margin.left + gi*colW;
+      series.forEach((s, si) => {
+        const val = row[s.key] || 0;
+        const bh = (val/maxVal) * plotH;
+        const bw = (colW - 8) / series.length;
+        const bx = gx + 4 + si*bw;
+        const color = row.color || `var(--series-${s.colorIdx||si+1})`;
+        svg += `<rect class="bar-rect" data-tip="${escAttr(`<div class="tt-title">${row.label}</div><div class="tt-row"><span class="tt-sw" style="background:${color}"></span><span class="tt-name">${s.label}</span><span class="tt-val">${valueFmt(val)}</span></div>`)}" x="${bx}" y="${margin.top+plotH-bh}" width="${Math.max(bw-2,2)}" height="${Math.max(bh,1)}" rx="3" fill="${color}"></rect>`;
+      });
+      svg += `<text class="axis-label" x="${gx+colW/2}" y="${h-margin.bottom+16}" text-anchor="middle">${escXML(row.label)}</text>`;
+    });
+    svg += `<line class="baseline" x1="${margin.left}" x2="${width-margin.right}" y1="${margin.top+plotH}" y2="${margin.top+plotH}"></line>`;
+  }
+  svg += `</svg>`;
+  return svg;
+}
+// (rank-based colour ramp removed: colour must follow the entity, not its rank --
+// a filter that reorders the bars would otherwise repaint everyone.)
+
+// Multi-series line/area chart. seriesData: [{key,label,colorIdx, points:[{x:Date,y:num}]}]
+// Hovering anywhere in a column reveals every series' value at that date at once,
+// rather than requiring the pointer to land on an individual dot.
+function lineChart(opts){
+  const { seriesData, width=680, height=240, area=false, valueFmt=fmtUSD0, showTotal=true } = opts;
+  const margin = {top:14,right:14,bottom:26,left:52};
+  const plotW = width - margin.left - margin.right;
+  const plotH = height - margin.top - margin.bottom;
+  const allPoints = seriesData.flatMap(s=>s.points);
+  if (!allPoints.length) return "";
+  const xs = allPoints.map(p=>p.x.getTime());
+  const xMin = Math.min(...xs), xMax = Math.max(...xs);
+  const yMax = Math.max(1, ...allPoints.map(p=>p.y)) * 1.12;
+  const xScale = t => margin.left + ((t-xMin)/(xMax-xMin || 1)) * plotW;
+  const yScale = v => margin.top + plotH - (v/yMax)*plotH;
+  // Unique per chart instance so several charts on one tab don't share gradient ids.
+  const uid = "g" + Math.abs(xMin ^ seriesData.length ^ Math.round(yMax)).toString(36);
+
+  let svg = `<svg viewBox="0 0 ${width} ${height}" width="100%" height="${height}" role="img">`;
+
+  // Soft vertical fade under each line, in that series' own colour.
+  svg += `<defs>` + seriesData.map(s=>
+    `<linearGradient id="${uid}-${s.colorIdx}" x1="0" y1="0" x2="0" y2="1">
+       <stop offset="0%" stop-color="var(--series-${s.colorIdx})" stop-opacity="0.28"></stop>
+       <stop offset="100%" stop-color="var(--series-${s.colorIdx})" stop-opacity="0.02"></stop>
+     </linearGradient>`).join("") + `</defs>`;
+
+  const gridN = 4;
+  for (let i=0;i<=gridN;i++){
+    const gy = margin.top + plotH - (i/gridN)*plotH;
+    svg += `<line class="gridline" x1="${margin.left}" x2="${width-margin.right}" y1="${gy}" y2="${gy}"></line>`;
+    svg += `<text class="axis-label" x="${margin.left-8}" y="${gy+3}" text-anchor="end">${valueFmt(yMax*i/gridN)}</text>`;
+  }
+
+  // x labels: about five, taken from real data points so they line up with the marks
+  const xsSorted = [...new Set(xs)].sort((a,b)=>a-b);
+  const tickEvery = Math.max(1, Math.round(xsSorted.length/5));
+  xsSorted.forEach((t,i)=>{
+    if (i % tickEvery && i !== xsSorted.length-1) return;
+    svg += `<text class="axis-label" x="${xScale(t)}" y="${height-margin.bottom+16}" text-anchor="middle">${fmtDate(new Date(t))}</text>`;
+  });
+
+  seriesData.forEach(s=>{
+    const pts = s.points.slice().sort((a,b)=>a.x-b.x);
+    if (!pts.length) return;
+    const path = pts.map((p,i)=> (i===0?"M":"L") + xScale(p.x.getTime()).toFixed(1) + "," + yScale(p.y).toFixed(1)).join(" ");
+    if (area) {
+      const base = (margin.top+plotH).toFixed(1);
+      svg += `<path d="${path} L${xScale(pts[pts.length-1].x.getTime()).toFixed(1)},${base} L${xScale(pts[0].x.getTime()).toFixed(1)},${base} Z" fill="url(#${uid}-${s.colorIdx})"></path>`;
+    }
+    svg += `<path class="line-path" d="${path}" stroke="var(--series-${s.colorIdx})" stroke-linecap="round" stroke-linejoin="round"></path>`;
+  });
+
+  // One hover column per date: a transparent band, immediately followed by the
+  // crosshair + dots it reveals (CSS adjacent-sibling, so no JS wiring needed).
+  const bandW = xsSorted.length>1 ? plotW/(xsSorted.length-1) : plotW;
+  xsSorted.forEach(t=>{
+    const cx = xScale(t);
+    const at = seriesData.map(s=>({ s, p: s.points.find(p=>p.x.getTime()===t) })).filter(r=>r.p);
+    const total = at.reduce((n,r)=>n+r.p.y,0);
+    const tip = `<div class="tt-title">${escAttr(fmtDateFull(new Date(t)))}</div>` +
+      at.map(r=>`<div class="tt-row"><span class="tt-sw" style="background:var(--series-${r.s.colorIdx})"></span><span class="tt-name">${escAttr(r.s.label)}</span><span class="tt-val">${escAttr(valueFmt(r.p.y))}</span></div>`).join("") +
+      (showTotal && at.length>1 ? `<div class="tt-row tt-total"><span class="tt-name">Total</span><span class="tt-val">${escAttr(valueFmt(total))}</span></div>` : "");
+    svg += `<rect class="hover-band" data-tip="${escAttr(tip)}" x="${(cx-bandW/2).toFixed(1)}" y="${margin.top}" width="${bandW.toFixed(1)}" height="${plotH}"></rect>`;
+    svg += `<g class="xg" pointer-events="none"><line class="xline" x1="${cx.toFixed(1)}" x2="${cx.toFixed(1)}" y1="${margin.top}" y2="${(margin.top+plotH).toFixed(1)}"></line>` +
+      at.map(r=>`<circle class="xdot" cx="${cx.toFixed(1)}" cy="${yScale(r.p.y).toFixed(1)}" r="4" fill="var(--series-${r.s.colorIdx})"></circle>`).join("") + `</g>`;
+  });
+
+  svg += `</svg>`;
+  return svg;
+}
+
+function legendHTML(items){
+  return `<div class="legend">${items.map(it=>`<div class="legend-item"><span class="legend-swatch" style="background:var(--series-${it.colorIdx})"></span>${escXML(it.label)}</div>`).join("")}</div>`;
+}
+
+// `drill` makes the tile openable: it renders as a real <button> so it is
+// keyboard-reachable, and carries the slice key the tab's renderer resolves
+// into a record list.
+function statTile({label, value, meta, deltaPct, targetLine, drill, drillCount}){
+  let metaHTML = "";
+  if (deltaPct !== undefined && isFinite(deltaPct)) {
+    const up = deltaPct >= 0;
+    metaHTML = `<span class="${up?'delta-up':'delta-down'}">${up?'▲':'▼'} ${Math.abs(deltaPct).toFixed(1)}%</span><span>vs prior period</span>`;
+  } else if (meta) {
+    metaHTML = meta;
+  }
+  const body = `
+    <div class="stat-label">${escXML(label)}</div>
+    <div class="stat-value tabular">${value}</div>
+    ${metaHTML ? `<div class="stat-meta">${metaHTML}</div>` : ""}
+    ${targetLine || ""}
+    ${drill ? `<div class="stat-drill-hint">${state.drill===drill? "Hide" : "Show"} ${drillCount!==undefined? fmtNum(drillCount)+" " : ""}customers →</div>` : ""}`;
+  if (!drill) return `<div class="stat-tile">${body}</div>`;
+  return `<button type="button" class="stat-tile${state.drill===drill?" open":""}" data-drill="${escAttr(drill)}"
+    aria-expanded="${state.drill===drill}">${body}</button>`;
+}
+
+// Year-to-date context strip. Present on every department tab regardless of the
+// range filter, so a month's numbers are never read without the full-year figure
+// beside them. Each tab supplies the stats that matter to it; the label and the
+// "same as selected range" note are handled here so all four stay consistent.
+function ytdBand(stats){
+  const [yStart] = ytdRange();
+  const same = state.range === "YTD";
+  return `<div class="context-band">
+    <div class="band-label">Year to Date
+      <span class="band-note">${fmtDateFull(yStart)} \u2013 today${same ? " \u00b7 same as selected range" : ""}</span>
+    </div>
+    ${stats.map(x=>`<div class="band-stat"><span class="k">${escXML(x.k)}</span><span class="v tabular">${x.v}</span></div>`).join("")}
+  </div>`;
+}
+
+// Everything completed year-to-date, honouring the location filter but not the
+// date filter. Optionally narrowed to one department.
+function ytdJobsFor(dept){
+  const [a,b] = ytdRange();
+  const j = jobsInRange(a,b);
+  return dept ? j.filter(x=>x.dept===dept) : j;
+}
+// Elapsed-day proportion of the calendar year -- deliberately the same maths
+// runRateTile() uses, so that with the range set to YTD the band and the tile
+// report the SAME number instead of disagreeing by a few thousand dollars.
+function annualisedRunRate(total){
+  const y = TODAY.getFullYear();
+  const start = new Date(y,0,1), end = new Date(y,11,31,23,59,59,999);
+  const elapsed = Math.max(1, TODAY - start);
+  return total * (end - start) / elapsed;
+}
+
+// Renders the record list behind a drilled-into metric.
+function drillPanel({title, subtitle, rows, columns}){
+  return `<div class="drill">
+    <div class="drill-head">
+      <div><h3>${escXML(title)}</h3><p class="card-sub" style="margin:0;">${subtitle}</p></div>
+      <button type="button" class="drill-close" data-drill-close>Close</button>
+    </div>
+    ${rows.length ? `<div class="table-wrap table-scroll">${tableHTML(columns, rows)}</div>`
+                  : emptyNote("Nothing to show for this metric in the selected period.")}
+  </div>`;
+}
+
+function meterLine(actual, target, higherIsBetter=true, fmt=x=>x){
+  const ratio = Math.max(0, Math.min(1.3, actual/target));
+  const good = higherIsBetter ? actual >= target : actual <= target;
+  const color = good ? "var(--good)" : (ratio>0.8 ? "var(--warning)" : "var(--critical)");
+  return `<div class="stat-target">
+    <div class="meter-track"><div class="meter-fill" style="width:${Math.min(100,ratio*100)}%;background:${color}"></div></div>
+    <div class="stat-meta"><span style="color:${color};font-weight:600">${fmt(actual)}</span><span>target ${fmt(target)}</span></div>
+  </div>`;
+}
+
+function tableHTML(columns, rows){
+  return `<div class="table-wrap"><table class="dtable">
+    <thead><tr>${columns.map(c=>`<th class="${c.num?'num':''}">${escXML(c.label)}</th>`).join("")}</tr></thead>
+    <tbody>${rows.map(r=>`<tr>${columns.map(c=>`<td class="${c.num?'num':''}">${c.render? c.render(r) : escXML(r[c.key])}</td>`).join("")}</tr>`).join("")}</tbody>
+  </table></div>`;
+}
+
+// Live data means a filter can legitimately match nothing. Say so plainly
+// rather than rendering an empty chart frame that reads as a broken widget.
+function emptyNote(msg){
+  return `<p style="margin:14px 0 6px; font-size:13px; color:var(--text-muted);">${escXML(msg)}</p>`;
+}
+
+function escXML(s){ return String(s).replace(/[&<>]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c])); }
+function escAttr(s){ return escXML(s).replace(/"/g,"&quot;"); }
+
+/* wire up hover tooltips for any [data-tip] element rendered into a container */
+function wireTooltips(container){
+  container.querySelectorAll("[data-tip]").forEach(el=>{
+    el.addEventListener("mousemove", e => showTooltip(e, e.currentTarget.getAttribute("data-tip")));
+    el.addEventListener("mouseenter", e => showTooltip(e, e.currentTarget.getAttribute("data-tip")));
+    el.addEventListener("mouseleave", hideTooltip);
+  });
+}
+
+/* ============================ AGGREGATION HELPERS ========================= */
+function jobsInRange(start,end){ return JOBS.filter(j=> !j.future && inRange(j.date,start,end) && locMatch(j.loc)); }
+
+// Booked work between now and `end`. Previously this returned EVERY future job
+// while the tiles claimed "next 45 days" -- with jobs on the board into November
+// that overstated the near-term board by counting work months out.
+function scheduledJobs(end, dept){
+  return JOBS.filter(j => j.future && j.date > TODAY && (!end || j.date <= end)
+    && locMatch(j.loc) && (!dept || j.dept === dept));
+}
+const BOARD_DAYS = (CONFIG.rules && CONFIG.rules.boardDays) || 45;
+function boardEnd(){ return addDays(TODAY, BOARD_DAYS); }
+
+// The forward half of the period the range filter names: MTD means the rest of
+// this month, QTD the rest of this quarter, and so on. This is what the current
+// period can still land, as opposed to the rolling board window above.
+function forwardRange(){
+  const y = TODAY.getFullYear(), m = TODAY.getMonth();
+  const endOfDay = d => new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999);
+  if (state.range === "MTD") return { end: endOfDay(new Date(y, m+1, 0)),  label: "Rest of This Month",   note: "through " };
+  if (state.range === "QTD") return { end: endOfDay(new Date(y, Math.floor(m/3)*3+3, 0)), label: "Rest of This Quarter", note: "through " };
+  if (state.range === "YTD") return { end: endOfDay(new Date(y, 11, 31)),  label: "Rest of This Year",    note: "through " };
+  return { end: endOfDay(state.customEnd), label: "Rest of Range", note: "through " };
+}
+
+// Renders the pair of scheduled tiles the department tabs share: the rolling
+// board window, and the remainder of whatever period the filter is showing.
+// What is still booked for the remainder of the period the filter names. Sits
+// beside completed revenue, because together they are "what we have done" and
+// "what is already on the books to finish it".
+function restOfPeriodTile(dept){
+  const fwd = forwardRange();
+  const ended = fwd.end <= TODAY;                       // a custom range that already closed
+  const rest = ended ? [] : scheduledJobs(fwd.end, dept);
+  return statTile({
+    label: fwd.label,
+    value: ended ? "—" : fmtUSD0(sum(rest, j=>j.revenue)),
+    meta: ended ? `<span>selected range has already ended</span>`
+                : `<span>${fmtNum(rest.length)} booked ${fwd.note}${fmtDate(fwd.end)}</span>`
+  });
+}
+
+// The rolling board window -- independent of the range filter.
+function boardTile(dept){
+  const board = scheduledJobs(boardEnd(), dept);
+  return statTile({
+    label: `On the Board (${BOARD_DAYS} Days)`,
+    value: fmtUSD0(sum(board, j=>j.revenue)),
+    meta: `<span>${fmtNum(board.length)} booked through ${fmtDate(boardEnd())}</span>`
+  });
+}
+
+// Where the selected period lands if the pace so far holds: completed revenue
+// scaled by how much of the period has actually elapsed. Deliberately based on
+// completed work only -- adding booked work would mix a measured pace with a
+// forecast and double-count the tile next to it. A period that has already
+// closed needs no projection, so it reports the actual.
+function runRateTile(completedTotal){
+  const [start] = activeDateRange();
+  const fwd = forwardRange();
+  const periodEnd = fwd.end;
+  const period = fwd.label.replace(/^Rest of /, "");     // "This Month" / "Range" ...
+  const elapsed = Math.max(1, TODAY - start);
+  const full = Math.max(elapsed, periodEnd - start);
+  const done = periodEnd <= TODAY;
+  const pct = Math.min(100, elapsed / full * 100);
+  return statTile({
+    label: `Run Rate (${period})`,
+    value: fmtUSD0(done ? completedTotal : completedTotal * full / elapsed),
+    meta: done ? `<span>period complete \u2014 actual, not projected</span>`
+               : `<span>at current pace \u00b7 ${pct.toFixed(0)}% of period elapsed</span>`
+  });
+}
+function sum(arr, f){ return arr.reduce((s,x)=>s+f(x),0); }
+// One person lookup for every tab: technicians, comfort advisors and office
+// staff all live in the same namespaced PEOPLE map.
+function personName(id){ return PEOPLE[id] || (id == null ? "Unassigned" : id); }
+const techName = personName;
+// Both tenants run campaigns of the same name ("Referral", "Website"), which
+// would render as duplicate rows in the Combined view. Only the ambiguous ones
+// get a location suffix, so unique names stay clean.
+const CAMPAIGN_NAME_COUNTS = {};
+CAMPAIGNS.forEach(c => { const n=(c.name||"").trim(); CAMPAIGN_NAME_COUNTS[n]=(CAMPAIGN_NAME_COUNTS[n]||0)+1; });
+function campaignName(id){
+  const c = CAMPAIGN_BY_ID.get(id);
+  if (!c) return "No campaign";
+  const n = (c.name || "").trim() || "(unnamed)";
+  return CAMPAIGN_NAME_COUNTS[n] > 1 ? `${n} (${c.loc})` : n;
+}
+
+/* ================================ TABS ==================================== */
+const TABS = [
+  { id:"revenue",  label:"Revenue" },
+  { id:"service",  label:"Service" },
+  { id:"sales",    label:"Sales" },
+  { id:"install",  label:"Installation" },
+  { id:"accounting", label:"Accounting" },
+  { id:"marketing", label:"Marketing" },
+  { id:"office",   label:"Office" },
+  { id:"memberships", label:"Memberships" }
+];
+
+function renderRevenue(container){
+  const [start,end] = activeDateRange();
+  const jobs = jobsInRange(start,end);
+  const completed = sum(jobs, j=>j.revenue);
+  // (scheduled figures come from restOfPeriodTile() and boardTile(), which split
+  // the rolling board window from the remainder of the selected period)
+  // The data window starts Jan 1, so a YTD or long custom range has no prior
+  // period to compare against. Showing "0.0% vs prior period" there would read
+  // as flat when it actually means "no comparison available" -- so the delta is
+  // omitted instead, and the tile says why.
+  const [pStart,pEnd] = previousComparableRange(state.range,start,end);
+  const prevJobs = jobsInRange(pStart,pEnd);
+  const prevCompleted = sum(prevJobs, j=>j.revenue);
+  const hasPrior = prevJobs.length > 0 && prevCompleted > 0;
+  const deltaPct = hasPrior ? ((completed-prevCompleted)/prevCompleted*100) : undefined;
+
+  // Averaging across ALL completed jobs understates the ticket badly, because a
+  // large share of completed jobs bill nothing: every comfort-advisor visit
+  // (Sales business units) produces an estimate rather than job revenue, and
+  // warranty/callback work is deliberately no-charge. Both are real work and
+  // stay in the job count -- they just don't belong in a revenue-per-job figure.
+  const billed = jobs.filter(j=>j.revenue>0);
+  const unbilledCount = jobs.length - billed.length;
+
+  const gran = chooseGranularity(start, end);
+  // Sales-department revenue here is COMPLETED job revenue booked to a Sales
+  // business unit -- not the same as the Sales tab's sold value, which counts
+  // work at the moment it is sold rather than when it is finished.
+  const byDay = {};
+  jobs.forEach(j=>{ const k=dkey(bucketDate(j.date,gran)); byDay[k]=byDay[k]||{Service:0,Install:0,Sales:0}; byDay[k][j.dept]+=j.revenue; });
+  const days = Object.keys(byDay).sort();
+  const seriesData = [
+    { key:"Service", label:"Service", colorIdx:1, points: days.map(k=>({x:new Date(k), y:byDay[k].Service})) },
+    { key:"Install", label:"Installation", colorIdx:2, points: days.map(k=>({x:new Date(k), y:byDay[k].Install})) },
+    { key:"Sales", label:"Sales", colorIdx:3, points: days.map(k=>({x:new Date(k), y:byDay[k].Sales})) }
+  ];
+
+  // revenue by individual (completed jobs, real technicians only)
+  // Keyed by NAME, not id: one person can hold several ServiceTitan user records,
+  // and keying by id would list them as separate people on the same chart.
+  const byIndiv = {};
+  jobs.filter(j=>j.tech && j.revenue>0).forEach(j=>{ const k=personName(j.tech); byIndiv[k]=(byIndiv[k]||0)+j.revenue; });
+  const indivRows = Object.entries(byIndiv).map(([name,val])=>({ label:name, val })).sort((a,b)=>b.val-a.val).slice(0,10);
+
+  // ---- year-to-date, independent of the range filter ----
+  const ytdJobs = ytdJobsFor();
+  const ytdRevenue = sum(ytdJobs, j=>j.revenue);
+  const ytdBilled = ytdJobs.filter(j=>j.revenue>0);
+
+  container.innerHTML = `
+    ${ytdBand([
+      {k:"Completed Revenue", v: fmtUSD0(ytdRevenue)},
+      {k:"Jobs Completed",    v: fmtNum(ytdJobs.length)},
+      {k:"Avg / Billed Job",  v: fmtUSD0(ytdBilled.length? sum(ytdBilled,j=>j.revenue)/ytdBilled.length : 0)},
+      {k:"Annualized Run Rate", v: fmtUSD0(annualisedRunRate(ytdRevenue))}
+    ])}
+    <div class="kpi-row">
+      ${statTile({label:"Completed Revenue", value: fmtUSD0(completed), deltaPct, meta: hasPrior? undefined : `<span>no prior period in range</span>`})}
+      ${restOfPeriodTile()}
+      ${runRateTile(completed)}
+    </div>
+    <div class="kpi-row">
+      ${boardTile()}
+      ${statTile({label:"Jobs Completed", value: fmtNum(jobs.length), meta:`<span>${fmtNum(billed.length)} billed · ${fmtNum(unbilledCount)} no-charge or sales visit</span>`})}
+      ${statTile({label:"Avg / Billed Job", value: fmtUSD0(billed.length? completed/billed.length:0), meta:`<span>${fmtUSD0(jobs.length? completed/jobs.length:0)} across all completed jobs</span>`})}
+    </div>
+    <div class="grid-2">
+      <div class="card"><div class="card-head"><h3>Revenue Over Time</h3></div><p class="card-sub">By department, over the selected range</p>
+        ${legendHTML(seriesData.map(s=>({label:s.label,colorIdx:s.colorIdx})))}
+        ${days.length ? lineChart({seriesData, area:true}) : emptyNote("No completed jobs in this period.")}
+      </div>
+      <div class="card"><h3>Revenue by Individual</h3><p class="card-sub">Completed and billed, top 10</p>
+        ${indivRows.length ? barChart({data: indivRows.map(r=>({label:r.label, v:r.val})), series:[{key:"v",label:"Revenue"}], sequential:true, valueFmt:fmtUSD0, width:520}) : emptyNote("No billed jobs in this period.")}
+      </div>
+    </div>
+  `;
+  wireTooltips(container);
+}
+
+function renderService(container){
+  const [start,end] = activeDateRange();
+  const jobs = jobsInRange(start,end).filter(j=>j.dept==="Service");
+  const completed = sum(jobs, j=>j.revenue);
+  // (scheduled figures come from restOfPeriodTile() and boardTile())
+
+  // Average ticket is measured on calls that actually BILLED. Roughly a third of
+  // completed service calls bill nothing -- warranty and callback work is
+  // no-charge by design -- and folding those zeros in drags the average far
+  // below what any tech actually sold. Revenue per dispatch (all calls, zeros
+  // included) is the other honest read, so both are shown rather than picking one.
+  const billed = jobs.filter(j=>j.revenue>0);
+  const noCharge = jobs.length - billed.length;
+  const avgTicket = billed.length? completed/billed.length : 0;
+  const revPerDispatch = jobs.length? completed/jobs.length : 0;
+
+  const membershipRate = jobs.length? sum(jobs,j=>j.membershipSold?1:0)/jobs.length*100 : 0;
+  // Low-ticket measures under-selling on calls that did bill; a $0 warranty call
+  // is not a low ticket, it is no ticket.
+  const lowTicketRate = billed.length? sum(billed,j=>j.lowTicket?1:0)/billed.length*100 : 0;
+
+  // Keyed by NAME so a tech holding two user records appears once.
+  const byTech = {};
+  jobs.forEach(j=>{
+    const k = personName(j.tech);
+    byTech[k] = byTech[k] || {revenue:0, jobs:0, billed:0, low:0, memberships:0, options:0};
+    const t = byTech[k]; t.revenue += j.revenue; t.jobs++;
+    if (j.revenue>0) { t.billed++; t.low += j.lowTicket?1:0; }
+    t.memberships += j.membershipSold?1:0; t.options += j.options;
+  });
+  const techRows = Object.entries(byTech).map(([name,t])=>({
+    tech: name, revenue: t.revenue, jobs: t.jobs, billed: t.billed,
+    avgTicket: t.billed? t.revenue/t.billed:0, lowPct: t.billed? t.low/t.billed*100:0,
+    memPct: t.jobs? t.memberships/t.jobs*100:0, options: t.jobs? t.options/t.jobs:0
+  })).sort((a,b)=>b.revenue-a.revenue);
+
+  // year to date, service department only
+  const yJobs = ytdJobsFor("Service");
+  const yRev = sum(yJobs, j=>j.revenue);
+  const yBilled = yJobs.filter(j=>j.revenue>0);
+  const yMemb = yJobs.length? sum(yJobs,j=>j.membershipSold?1:0)/yJobs.length*100 : 0;
+
+  container.innerHTML = `
+    ${ytdBand([
+      {k:"Completed Revenue", v: fmtUSD0(yRev)},
+      {k:"Calls Completed",   v: fmtNum(yJobs.length)},
+      {k:"Avg Ticket",        v: fmtUSD0(yBilled.length? sum(yBilled,j=>j.revenue)/yBilled.length : 0)},
+      {k:"Membership Attach", v: fmtPct(yMemb)},
+      {k:"Annualized Run Rate", v: fmtUSD0(annualisedRunRate(yRev))}
+    ])}
+    <div class="kpi-row">
+      ${statTile({label:"Completed Revenue", value: fmtUSD0(completed)})}
+      ${restOfPeriodTile("Service")}
+      ${runRateTile(completed)}
+    </div>
+    <div class="kpi-row">
+      ${boardTile("Service")}
+      ${statTile({label:"Avg Ticket", value: fmtUSD0(avgTicket), meta:`<span>${fmtUSD0(revPerDispatch)} per dispatch incl. ${fmtNum(noCharge)} no-charge</span>`, targetLine: TARGETS.avgTicket ? meterLine(avgTicket, TARGETS.avgTicket, true, fmtUSD0) : ""})}
+      ${statTile({label:"Membership Attach", value: fmtPct(membershipRate), targetLine: TARGETS.membershipAttachPct ? meterLine(membershipRate, TARGETS.membershipAttachPct, true, fmtPct) : ""})}
+      ${statTile({label:"Low-Ticket Jobs", value: fmtPct(lowTicketRate), meta:`<span>of billed calls</span>`, targetLine: TARGETS.lowTicketPct ? meterLine(lowTicketRate, TARGETS.lowTicketPct, false, fmtPct) : ""})}
+    </div>
+    <div class="card" style="margin-bottom:16px;">
+      <h3>Revenue by Technician</h3><p class="card-sub">Completed, service department</p>
+      ${techRows.length ? barChart({data: techRows.map(r=>({label:r.tech, v:r.revenue})), series:[{key:"v",label:"Revenue"}], sequential:true, valueFmt:fmtUSD0, width:900}) : emptyNote("No service jobs in this period.")}
+    </div>
+    <div class="card">
+      <h3>Technician Scorecard</h3><p class="card-sub">${targetCaption()}</p>
+      ${techRows.length ? tableHTML([
+        {label:"Technician", key:"tech"},
+        {label:"Calls", key:"jobs", num:true},
+        {label:"Billed", key:"billed", num:true},
+        {label:"Revenue", num:true, render:r=>fmtUSD0(r.revenue)},
+        {label:"Avg Ticket", num:true, render:r=>fmtUSD0(r.avgTicket)},
+        {label:"Low-Ticket %", num:true, render:r=>fmtPct(r.lowPct)},
+        {label:"Membership %", num:true, render:r=>fmtPct(r.memPct)},
+        {label:"Options/Appt", num:true, render:r=>r.options.toFixed(1)}
+      ], techRows) : emptyNote("No service jobs in this period.")}
+      <p class="card-sub" style="margin-top:12px;">Avg ticket and low-ticket % are measured on billed calls; membership attach is measured on every call dispatched.</p>
+    </div>
+  `;
+  wireTooltips(container);
+}
+
+function renderSales(container){
+  const [start,end] = activeDateRange();
+
+  // Close rate is measured on a COHORT of opportunities: of the chances to sell
+  // PRESENTED in this window, how many have since been won. Two things this
+  // deliberately avoids -- counting each Good/Better/Best option as its own
+  // opportunity (handled upstream), and comparing "won this month" against
+  // "presented this month", which mixes populations and yields ratios over 100%.
+  const cohort = OPPORTUNITIES.filter(o=>o.presentedOn && inRange(o.presentedOn,start,end) && locMatch(o.loc));
+  const cohortWon = cohort.filter(o=>o.won);
+  const cohortOpen = cohort.filter(o=>!o.won);
+  const cohortValue = sum(cohortWon, o=>o.value);
+  const closeRate = cohort.length? cohortWon.length/cohort.length*100 : 0;
+
+  // Separately: what actually closed during this window, whenever first presented.
+  const wonNow = OPPORTUNITIES.filter(o=>o.wonOn && inRange(o.wonOn,start,end) && locMatch(o.loc));
+  const bookedValue = sum(wonNow, o=>o.value);
+
+  // Still-open opportunities from this window, valued at their largest single
+  // option -- what is realistically still winnable, not the sum of every option.
+  const openPipeline = sum(cohortOpen, o=>o.topOption);
+  const optionsShown = sum(cohort, o=>o.options);
+
+  // Reps are keyed by NAME: the same person can hold both a technician id and an
+  // employee id in ServiceTitan and would otherwise appear as two rows.
+  // ---- year to date, on the same cohort logic the tab uses for the selected range ----
+  const [yStart,yEnd] = ytdRange();
+  const yCohort = OPPORTUNITIES.filter(o=>o.presentedOn && inRange(o.presentedOn,yStart,yEnd) && locMatch(o.loc));
+  const yWon = yCohort.filter(o=>o.won);
+  const yWonValue = sum(yWon, o=>o.value);
+  const yBooked = sum(OPPORTUNITIES.filter(o=>o.wonOn && inRange(o.wonOn,yStart,yEnd) && locMatch(o.loc)), o=>o.value);
+
+  // Reps are rolled up for BOTH windows at once, keyed by name. Building from the
+  // union means a rep with nothing in the selected range still appears with their
+  // year-to-date figure, instead of vanishing from the table whenever the filter
+  // narrows -- which is the whole point of an always-on YTD column.
+  const byRep = {};
+  const repBucket = name => (byRep[name] = byRep[name] || {run:0, won:0, value:0, ytdRun:0, ytdWon:0, ytdValue:0});
+  cohort.forEach(o=>{ repBucket(personName(o.owner)).run++; });
+  cohortWon.forEach(o=>{ const r=repBucket(personName(o.owner)); r.won++; r.value+=o.value; });
+  yCohort.forEach(o=>{ repBucket(personName(o.owner)).ytdRun++; });
+  yWon.forEach(o=>{ const r=repBucket(personName(o.owner)); r.ytdWon++; r.ytdValue+=o.value; });
+
+  const repRows = Object.entries(byRep)
+    .filter(([name])=>name!=="Unassigned")
+    .map(([name,r])=>({
+      rep:name, run:r.run, won:r.won, closeRate: r.run? r.won/r.run*100:0,
+      avgTicket: r.won? r.value/r.won:0, value: r.value,
+      ytdWon: r.ytdWon, ytdValue: r.ytdValue
+    }))
+    // selected-range revenue first, then year-to-date, so reps who are quiet this
+    // period still rank sensibly against each other rather than in arbitrary order
+    .sort((a,b)=> b.value-a.value || b.ytdValue-a.ytdValue);
+
+  // The charts stay scoped to the selected range -- padding them with zero-length
+  // bars for reps with no activity this period would just be noise.
+  const withValue = repRows.filter(r=>r.value>0);
+  const activeInRange = repRows.filter(r=>r.run>0);
+
+  // ---- drill-down: every headline number can be opened to the records behind it ----
+  const SLICES = {
+    booked:    { title:"Booked in this period",        rows: wonNow,     dateField:"wonOn",       note:"Opportunities won during the selected range, whenever they were first presented." },
+    presented: { title:"Opportunities presented",      rows: cohort,     dateField:"presentedOn", note:"Every chance to sell first presented in the selected range. One row per job, however many options were shown." },
+    won:       { title:"Presented and since won",      rows: cohortWon,  dateField:"presentedOn", note:"Of the opportunities presented in this range, the ones that have since closed." },
+    rate:      { title:"Close rate detail",            rows: cohort,     dateField:"presentedOn", note:"All opportunities presented in this range, won and still open, ranked by value." },
+    ticket:    { title:"Sold tickets",                 rows: cohortWon,  dateField:"presentedOn", note:"The won opportunities behind the average sold ticket." },
+    open:      { title:"Still open",                   rows: cohortOpen, dateField:"presentedOn", note:"Presented in this range and not yet decided, valued at the largest single option shown." }
+  };
+  // A rep bar drills into just that rep's opportunities.
+  repRows.forEach(r=>{
+    SLICES["rep:"+r.rep] = { title:r.rep, rows: cohort.filter(o=>personName(o.owner)===r.rep),
+      dateField:"presentedOn", note:`Every opportunity ${r.rep} presented in the selected range.` };
+  });
+
+  const slice = SLICES[state.drill];
+  let drillHTML = "";
+  if (slice) {
+    const useTop = state.drill === "open";
+    const rows = slice.rows.slice().sort((a,b)=> (useTop? b.topOption-a.topOption : b.value-a.value));
+    const total = sum(rows, o=> useTop? o.topOption : o.value);
+    drillHTML = drillPanel({
+      title: slice.title,
+      subtitle: `${fmtNum(rows.length)} ${rows.length===1?"opportunity":"opportunities"} · ${fmtUSD0(total)}${useTop?" at best option":""} — ${escXML(slice.note)}`,
+      rows,
+      columns: [
+        {label:"Customer", render:o=>escXML(o.customer||"—") + (o.city? `<span style="color:var(--text-muted)"> · ${escXML(o.city)}</span>`:"")},
+        {label:"What was quoted", render:o=>escXML(o.title||"—")},
+        {label:"Rep", render:o=>escXML(personName(o.owner))},
+        {label:"Job #", render:o=>escXML(o.jobNumber||"—")},
+        {label:"Presented", render:o=>o.presentedOn? fmtDate(o.presentedOn):"—"},
+        {label:"Options", key:"options", num:true},
+        {label:"Status", render:o=>o.won? `<span class="won-yes">Won${o.wonOn? " "+fmtDate(o.wonOn):""}</span>` : `<span class="won-no">Open</span>`},
+        {label: useTop?"Best option":"Value", num:true, render:o=>fmtUSD0(useTop? o.topOption : o.value)}
+      ]
+    });
+  }
+
+  container.innerHTML = `
+    ${ytdBand([
+      {k:"Booked Value",    v: fmtUSD0(yBooked)},
+      {k:"Presented",       v: fmtNum(yCohort.length)},
+      {k:"Won",             v: fmtNum(yWon.length)},
+      {k:"Close Rate",      v: fmtPct(yCohort.length? yWon.length/yCohort.length*100 : 0)},
+      {k:"Avg Sold Ticket", v: fmtUSD0(yWon.length? yWonValue/yWon.length : 0)},
+      {k:"Annualized Run Rate", v: fmtUSD0(annualisedRunRate(yBooked))}
+    ])}
+    <div class="kpi-row">
+      ${statTile({label:"Booked Value", value: fmtUSD0(bookedValue), meta:`<span>${fmtNum(wonNow.length)} opportunities won in this period</span>`, drill:"booked", drillCount:wonNow.length})}
+      ${statTile({label:"Opportunities Presented", value: fmtNum(cohort.length), meta:`<span>${fmtNum(optionsShown)} options across them</span>`, drill:"presented", drillCount:cohort.length})}
+      ${statTile({label:"Of Those, Won", value: fmtNum(cohortWon.length), meta:`<span>${fmtUSD0(cohortValue)} value</span>`, drill:"won", drillCount:cohortWon.length})}
+      ${statTile({label:"Close Rate", value: fmtPct(closeRate), meta:`<span>opportunities, not individual options</span>`, drill:"rate", drillCount:cohort.length})}
+      ${statTile({label:"Avg Sold Ticket", value: fmtUSD0(cohortWon.length? cohortValue/cohortWon.length : 0), drill:"ticket", drillCount:cohortWon.length})}
+      ${statTile({label:"Still Open", value: fmtUSD0(openPipeline), meta:`<span>${fmtNum(cohortOpen.length)} undecided, at best option</span>`, drill:"open", drillCount:cohortOpen.length})}
+    </div>
+    <div class="grid-2b">
+      <div class="card"><h3>Sold Revenue by Rep</h3><p class="card-sub">Opportunities presented in this period that have since been won — click a bar for the detail</p>
+        ${withValue.length ? barChart({data: withValue.map(r=>({label:r.rep, v:r.value, drill:"rep:"+r.rep})), series:[{key:"v",label:"Revenue"}], sequential:true, valueFmt:fmtUSD0, width:520}) : emptyNote("Nothing from this period has been won yet.")}
+      </div>
+      <div class="card"><h3>Close Rate by Rep</h3><p class="card-sub">Opportunities won as a share of those presented</p>
+        ${activeInRange.length ? barChart({data: activeInRange.map(r=>({label:r.rep, v:r.closeRate, drill:"rep:"+r.rep})), series:[{key:"v",label:"Close Rate"}], sequential:true, valueFmt:fmtPct, width:520}) : emptyNote("No opportunities presented in this period.")}
+      </div>
+    </div>
+    <div class="card">
+      <h3>Sales Rep Detail</h3><p class="card-sub">Opportunities presented in this period and their outcome to date</p>
+      ${repRows.length ? tableHTML([
+        {label:"Rep", key:"rep"},
+        {label:"Presented", key:"run", num:true},
+        {label:"Won", key:"won", num:true},
+        {label:"Close Rate", num:true, render:r=>r.run? fmtPct(r.closeRate) : "—"},
+        {label:"Avg Ticket", num:true, render:r=>r.won? fmtUSD0(r.avgTicket) : "—"},
+        {label:"Revenue", num:true, render:r=>fmtUSD0(r.value)},
+        {label:"YTD Revenue", num:true, render:r=>`<span class="ytd-col">${fmtUSD0(r.ytdValue)}</span>`},
+        {label:"YTD Won", num:true, render:r=>`<span class="ytd-col">${fmtNum(r.ytdWon)}</span>`}
+      ], repRows) : emptyNote("No opportunity activity in this period.")}
+      <p class="card-sub" style="margin-top:12px;">One opportunity = one job's estimate presentation \u2014 a Good/Better/Best set counts once, not three times. The YTD columns cover Jan 1 to today and do not move with the date filter, so a rep with a quiet period still shows their year.</p>
+    </div>
+    ${drillHTML}
+  `;
+  wireTooltips(container);
+}
+
+function renderInstall(container){
+  const [start,end] = activeDateRange();
+  const completedJobs = jobsInRange(start,end).filter(j=>j.dept==="Install");
+  // The by-installer chart shows the same board window the tile reports, so the
+  // two cannot disagree about what "scheduled" means.
+  const scheduled = scheduledJobs(boardEnd(), "Install");
+  const completed = sum(completedJobs, j=>j.revenue);
+
+  // Keyed by NAME so a tech holding two user records appears once. Installers with
+  // no activity are seeded so the chart shows the whole crew, not just the busy half.
+  const byTech = {};
+  const techBucket = k => (byTech[k] = byTech[k] || {completed:0, scheduled:0});
+  TECHS.filter(t=>t.dept==="Install" && (state.loc==="ALL"||t.loc===state.loc))
+       .forEach(t=>{ techBucket(personName(t.id)); });
+  completedJobs.forEach(j=>{ techBucket(personName(j.tech)).completed += j.revenue; });
+  scheduled.forEach(j=>{ techBucket(personName(j.tech)).scheduled += j.revenue; });
+  const rows = Object.entries(byTech).map(([name,t])=>({ label:name, completed:t.completed, scheduled:t.scheduled }))
+    .sort((a,b)=>(b.completed+b.scheduled)-(a.completed+a.scheduled));
+
+  // year to date, installation department only
+  const yJobs = ytdJobsFor("Install");
+  const yRev = sum(yJobs, j=>j.revenue);
+  const yBilled = yJobs.filter(j=>j.revenue>0);
+
+  container.innerHTML = `
+    ${ytdBand([
+      {k:"Completed Revenue", v: fmtUSD0(yRev)},
+      {k:"Installs Completed", v: fmtNum(yJobs.length)},
+      {k:"Avg Install Ticket", v: fmtUSD0(yBilled.length? sum(yBilled,j=>j.revenue)/yBilled.length : 0)},
+      {k:"Annualized Run Rate", v: fmtUSD0(annualisedRunRate(yRev))}
+    ])}
+    <div class="kpi-row">
+      ${statTile({label:"Completed Revenue", value: fmtUSD0(completed)})}
+      ${restOfPeriodTile("Install")}
+      ${runRateTile(completed)}
+    </div>
+    <div class="kpi-row">
+      ${boardTile("Install")}
+      ${statTile({label:"Installs Completed", value: fmtNum(completedJobs.length)})}
+      ${statTile({label:"Avg Install Ticket", value: fmtUSD0(completedJobs.length? completed/completedJobs.length:0)})}
+    </div>
+    <div class="card">
+      <h3>Revenue by Installer</h3><p class="card-sub">Completed vs. scheduled</p>
+      ${legendHTML([{label:"Completed",colorIdx:1},{label:"Scheduled",colorIdx:2}])}
+      ${barChart({data: rows, series:[{key:"completed",label:"Completed",colorIdx:1},{key:"scheduled",label:"Scheduled",colorIdx:2}], valueFmt:fmtUSD0, width:900})}
+    </div>
+  `;
+  wireTooltips(container);
+}
+
+function renderAccounting(container){
+  const openPOs = PURCHASE_ORDERS.filter(p=>locMatch(p.loc));
+  const poTotal = sum(openPOs, p=>p.amount);
+  const allPOCount = Object.entries(PO_TOTALS)
+    .filter(([loc]) => locMatch(loc)).reduce((s,[,n]) => s+n, 0);
+  const arRows = AR_INVOICES.filter(a=>locMatch(a.loc));
+  const arTotal = sum(arRows, a=>a.amount);
+  const overdue = arRows.filter(a=>a.daysAgo>30);
+  const overdueTotal = sum(overdue, a=>a.amount);
+
+  const bucketTotals = AR_BUCKETS.map(b=>({ bucket:b, amount: sum(arRows.filter(a=>arBucket(a.daysAgo)===b), a=>a.amount) }));
+
+  // AR by customer, largest exposure first -- that is the collections worklist.
+  const byCustomer = {};
+  arRows.forEach(a=>{
+    byCustomer[a.customer] = byCustomer[a.customer] || {customer:a.customer, amount:0, invoices:0, oldest:0};
+    const c = byCustomer[a.customer];
+    c.amount += a.amount; c.invoices++; c.oldest = Math.max(c.oldest, a.daysAgo);
+  });
+  const custRows = Object.values(byCustomer).sort((a,b)=>b.amount-a.amount);
+
+  container.innerHTML = `
+    <div class="kpi-row">
+      ${statTile({label:"Total AR", value: fmtUSD0(arTotal), meta:`<span>${arRows.length} open invoices</span>`})}
+      ${statTile({label:"AR Past 30 Days", value: fmtUSD0(overdueTotal), meta:`<span>${overdue.length} invoices · ${arTotal? (overdueTotal/arTotal*100).toFixed(0):0}% of AR</span>`})}
+      ${statTile({label:"Committed on Open POs", value: fmtUSD0(poTotal), meta:`<span>${openPOs.length} of ${allPOCount} POs not yet received</span>`})}
+    </div>
+    <div class="card" style="margin-bottom:16px;">
+      <h3>AR Aging</h3><p class="card-sub">By days past due</p>
+      <div style="display:flex; gap:10px; margin:4px 0 14px; flex-wrap:wrap;">
+        ${bucketTotals.map(b=>`<span class="pill ${AR_BUCKET_STATUS[b.bucket]}"><span class="dot ${AR_BUCKET_STATUS[b.bucket]}"></span>${b.bucket} days · ${fmtUSD0(b.amount)}</span>`).join("")}
+      </div>
+      ${arRows.length ? barChart({data: bucketTotals.map(b=>({label:b.bucket+" days", v:b.amount, color:`var(--${AR_BUCKET_STATUS[b.bucket]})`})), series:[{key:"v",label:"AR"}], valueFmt:fmtUSD0, width:900, horizontal:false, height:200}) : emptyNote("No open receivables.")}
+    </div>
+    <div class="grid-2b">
+      <div class="card">
+        <h3>AR by Customer</h3><p class="card-sub">Largest balance first</p>
+        <div class="table-scroll">
+        ${custRows.length ? tableHTML([
+          {label:"Customer", key:"customer"},
+          {label:"Invoices", key:"invoices", num:true},
+          {label:"Oldest", num:true, render:r=>r.oldest+"d"},
+          {label:"Status", render:r=>`<span class="pill ${AR_BUCKET_STATUS[arBucket(r.oldest)]}"><span class="dot ${AR_BUCKET_STATUS[arBucket(r.oldest)]}"></span>${arBucket(r.oldest)}</span>`},
+          {label:"Balance", num:true, render:r=>fmtUSD0(r.amount)}
+        ], custRows.slice(0,50)) : emptyNote("No open receivables.")}
+        </div>
+      </div>
+      <div class="card">
+        <h3>Open Purchase Orders</h3><p class="card-sub">Not yet received</p>
+        <div class="table-scroll">
+        ${openPOs.length ? tableHTML([
+          {label:"Vendor", key:"vendor"},
+          {label:"Date", render:r=>r.date? fmtDate(r.date):"—"},
+          {label:"Status", key:"status"},
+          {label:"Amount", num:true, render:r=>fmtUSD0(r.amount)}
+        ], openPOs.slice().sort((a,b)=>(b.date||0)-(a.date||0))) : emptyNote("No open purchase orders.")}
+        </div>
+      </div>
+    </div>
+  `;
+  wireTooltips(container);
+}
+
+function renderMarketing(container){
+  const [start,end] = activeDateRange();
+  // Revenue is attributed DIRECTLY: every ServiceTitan job carries the campaign
+  // that generated it, so no proportional guesswork is needed.
+  const jobs = jobsInRange(start,end);
+  const calls = CALLS.filter(c=>c.inbound && inRange(c.date,start,end) && locMatch(c.loc));
+
+  const agg = {};
+  const bucket = id => (agg[id] = agg[id] || {calls:0, bookedCalls:0, jobs:0, revenue:0});
+  calls.forEach(c=>{ const b=bucket(c.campaign); b.calls+=c.n; b.bookedCalls+=c.booked; });
+  jobs.forEach(j=>{ const b=bucket(j.campaign); b.jobs++; b.revenue+=j.revenue; });
+
+  const rows = Object.entries(agg).map(([id,a])=>({
+    campaign: campaignName(id),
+    category: (CAMPAIGN_BY_ID.get(id)||{}).category || "\u2014",
+    loc: (CAMPAIGN_BY_ID.get(id)||{}).loc || "\u2014",
+    calls:a.calls, bookedCalls:a.bookedCalls, jobs:a.jobs, revenue:a.revenue,
+    bookRate: a.calls? a.bookedCalls/a.calls*100 : 0
+  })).sort((a,b)=>b.revenue-a.revenue);
+
+  const withRevenue = rows.filter(r=>r.revenue>0);
+  const totalRevenue = sum(rows, r=>r.revenue);
+  const totalCalls = sum(rows, r=>r.calls);
+  const totalJobs = sum(rows, r=>r.jobs);
+
+  container.innerHTML = `
+    <div class="kpi-row">
+      ${statTile({label:"Attributed Revenue", value: fmtUSD0(totalRevenue), meta:`<span>${withRevenue.length} campaigns producing</span>`})}
+      ${statTile({label:"Inbound Calls", value: fmtNum(totalCalls)})}
+      ${statTile({label:"Jobs Generated", value: fmtNum(totalJobs)})}
+      ${statTile({label:"Revenue / Job", value: fmtUSD0(totalJobs? totalRevenue/totalJobs : 0)})}
+    </div>
+    <div class="card" style="margin-bottom:16px;">
+      <h3>Revenue by Campaign</h3><p class="card-sub">Completed jobs attributed to their source campaign</p>
+      ${withRevenue.length ? barChart({data: withRevenue.slice(0,12).map(r=>({label:r.campaign, v:r.revenue})), series:[{key:"v",label:"Revenue"}], sequential:true, valueFmt:fmtUSD0, width:900}) : emptyNote("No campaign-attributed revenue in this period.")}
+    </div>
+    <div class="card">
+      <h3>Campaign Detail</h3><p class="card-sub">Inbound calls, jobs generated, and revenue</p>
+      <div class="table-scroll">
+      ${rows.length ? tableHTML([
+        {label:"Campaign", key:"campaign"},
+        {label:"Category", key:"category"},
+        {label:"Calls", key:"calls", num:true},
+        {label:"Booked", key:"bookedCalls", num:true},
+        {label:"Book Rate", num:true, render:r=>r.calls? fmtPct(r.bookRate):"\u2014"},
+        {label:"Jobs", key:"jobs", num:true},
+        {label:"Revenue", num:true, render:r=>fmtUSD0(r.revenue)}
+      ], rows) : emptyNote("No campaign activity in this period.")}
+      </div>
+    </div>
+  `;
+  wireTooltips(container);
+}
+
+function renderOffice(container){
+  const [start,end] = activeDateRange();
+  // Booking and abandon rates only make sense against inbound calls -- outbound
+  // dials are reported separately rather than diluting the rates.
+  const all = CALLS.filter(c=>inRange(c.date,start,end) && locMatch(c.loc));
+  const calls = all.filter(c=>c.inbound);
+  const inboundN = sum(calls, c=>c.n);
+  const outbound = sum(all.filter(c=>!c.inbound), c=>c.n);
+  const booked = sum(calls, c=>c.booked);
+  const abandoned = sum(calls, c=>c.abandoned);
+  const bookRate = inboundN? booked/inboundN*100:0;
+  const abandonRate = inboundN? abandoned/inboundN*100:0;
+
+  const gran = chooseGranularity(start, end);
+  const byDay = {};
+  calls.forEach(c=>{ const k=dkey(bucketDate(c.date,gran)); byDay[k]=byDay[k]||{calls:0,booked:0,abandoned:0}; byDay[k].calls+=c.n; byDay[k].booked+=c.booked; byDay[k].abandoned+=c.abandoned; });
+  const days = Object.keys(byDay).sort();
+  const seriesData = [
+    { key:"calls", label:"Inbound", colorIdx:1, points: days.map(k=>({x:new Date(k), y:byDay[k].calls})) },
+    { key:"booked", label:"Booked", colorIdx:3, points: days.map(k=>({x:new Date(k), y:byDay[k].booked})) },
+    { key:"abandoned", label:"Abandoned", colorIdx:2, points: days.map(k=>({x:new Date(k), y:byDay[k].abandoned})) }
+  ];
+
+  // An abandoned call was never picked up, so it has no agent -- every real
+  // agent's abandon rate is 0 by construction, and the unanswered calls pile up
+  // under a name that isn't a person. So the per-agent table covers ANSWERED
+  // calls only, and abandonment is reported company-wide in the KPI row above.
+  const byAgent = {};
+  calls.forEach(c=>{
+    const answered = c.n - c.abandoned;
+    if (!c.agentName || answered <= 0) return;
+    byAgent[c.agentName]=byAgent[c.agentName]||{calls:0,booked:0};
+    byAgent[c.agentName].calls+=answered; byAgent[c.agentName].booked+=c.booked;
+  });
+  const agentRows = Object.entries(byAgent).map(([name,c])=>({
+    csr:name, calls:c.calls, booked:c.booked,
+    bookRate: c.calls? c.booked/c.calls*100:0
+  })).sort((a,b)=>b.calls-a.calls);
+  const unanswered = sum(calls.filter(c=>!c.agentName), c=>c.n);
+
+  container.innerHTML = `
+    <div class="kpi-row">
+      ${statTile({label:"Inbound Calls", value: fmtNum(inboundN), meta:`<span>${fmtNum(outbound)} outbound not counted</span>`})}
+      ${statTile({label:"Booked", value: fmtNum(booked), meta:`<span>${fmtPct(bookRate)} of inbound</span>`})}
+      ${statTile({label:"Abandoned", value: fmtNum(abandoned), meta:`<span class="${abandonRate>10?'delta-down':''}">${fmtPct(abandonRate)} of inbound</span>`})}
+    </div>
+    <div class="card" style="margin-bottom:16px;">
+      <h3>Call Volume</h3><p class="card-sub">Inbound, booked and abandoned over time</p>
+      ${legendHTML(seriesData.map(s=>({label:s.label,colorIdx:s.colorIdx})))}
+      ${days.length ? lineChart({seriesData, area:false, valueFmt:fmtNum}) : emptyNote("No calls in this period.")}
+    </div>
+    <div class="card">
+      <h3>By Agent</h3><p class="card-sub">Answered inbound calls and how many were booked</p>
+      ${agentRows.length ? tableHTML([
+        {label:"Agent", key:"csr"},
+        {label:"Answered", key:"calls", num:true},
+        {label:"Booked", key:"booked", num:true},
+        {label:"Book Rate", num:true, render:r=>fmtPct(r.bookRate)}
+      ], agentRows) : emptyNote("No answered inbound calls in this period.")}
+      <p class="card-sub" style="margin-top:12px;">${fmtNum(unanswered)} inbound call${unanswered===1?"":"s"} reached no agent and are excluded here \u2014 abandonment is a company-wide number, shown above.</p>
+    </div>
+  `;
+  wireTooltips(container);
+}
+
+function renderMemberships(container){
+  const rows = MEMBERSHIPS.filter(m=>locMatch(m.loc));
+  const active = rows.filter(m=>m.active);
+  // Plans come from the tenant's own membership types, so this adapts on its own
+  // if plans are added or renamed in ServiceTitan.
+  const planCounts = {};
+  active.forEach(m=>{ planCounts[m.plan] = (planCounts[m.plan]||0)+1; });
+  const byPlan = Object.entries(planCounts).map(([label,v])=>({label,v})).sort((a,b)=>b.v-a.v);
+
+  const daysOut = m => m.renewDate ? (m.renewDate-TODAY)/86400000 : null;
+  const renewals30 = active.filter(m=>{ const d=daysOut(m); return d!==null && d>=0 && d<=30; });
+  const renewals90 = active.filter(m=>{ const d=daysOut(m); return d!==null && d>=0 && d<=90; });
+  const expired = rows.filter(m=>{ const d=daysOut(m); return d!==null && d<0; });
+
+  const [start,end] = activeDateRange();
+  const soldInRange = rows.filter(m=>m.startDate && inRange(m.startDate,start,end));
+
+  container.innerHTML = `
+    <div class="kpi-row">
+      ${statTile({label:"Active Members", value: fmtNum(active.length)})}
+      ${statTile({label:"Sold This Period", value: fmtNum(soldInRange.length)})}
+      ${statTile({label:"Renewals Due (30d)", value: fmtNum(renewals30.length)})}
+      ${statTile({label:"Renewals Due (90d)", value: fmtNum(renewals90.length)})}
+      ${statTile({label:"Past Renewal Date", value: fmtNum(expired.length)})}
+    </div>
+    <div class="grid-2b">
+      <div class="card"><h3>Active Members by Plan</h3><p class="card-sub">Plans as configured in ServiceTitan</p>
+        ${byPlan.length ? barChart({data: byPlan, series:[{key:"v",label:"Members"}], sequential:true, valueFmt:fmtNum, width:520}) : emptyNote("No active memberships.")}
+      </div>
+      <div class="card"><h3>Upcoming Renewals</h3><p class="card-sub">Next 90 days</p>
+        <div class="table-scroll">
+        ${renewals90.length ? tableHTML([
+          {label:"Plan", key:"plan"},
+          {label:"Location", key:"loc"},
+          {label:"Sold By", render:r=>personName(r.soldBy)},
+          {label:"Renews", render:r=>fmtDate(r.renewDate)}
+        ], renewals90.slice().sort((a,b)=>a.renewDate-b.renewDate)) : emptyNote("No renewals due in the next 90 days.")}
+        </div>
+      </div>
+    </div>
+  `;
+  wireTooltips(container);
+}
+
+const RENDERERS = {
+  revenue: renderRevenue, service: renderService, sales: renderSales, install: renderInstall,
+  accounting: renderAccounting, marketing: renderMarketing, office: renderOffice, memberships: renderMemberships
+};
+
+/* ============================== APP SHELL ================================= */
+function buildShell(){
+  const nav = document.getElementById("tabNav");
+  nav.innerHTML = TABS.map(t=>`<button data-tab="${t.id}" class="${t.id===state.tab?'active':''}">${t.label}</button>`).join("");
+  const main = document.getElementById("main");
+  main.innerHTML = TABS.map(t=>`<div class="panel ${t.id===state.tab?'active':''}" id="panel-${t.id}"></div>`).join("");
+  nav.querySelectorAll("button").forEach(b=>b.addEventListener("click", ()=>{
+    state.tab = b.getAttribute("data-tab");
+    state.drill = null;
+    nav.querySelectorAll("button").forEach(x=>x.classList.toggle("active", x===b));
+    document.querySelectorAll(".panel").forEach(p=>p.classList.toggle("active", p.id === "panel-"+state.tab));
+    renderActive();
+  }));
+}
+function renderActive(){
+  const panel = document.getElementById("panel-"+state.tab);
+  RENDERERS[state.tab](panel);
+}
+
+// Drill open/close is delegated from <main>, so it survives every re-render
+// without each renderer having to re-attach handlers.
+document.getElementById("main").addEventListener("click", e => {
+  const closer = e.target.closest("[data-drill-close]");
+  if (closer) { state.drill = null; renderActive(); return; }
+  const tile = e.target.closest("[data-drill]");
+  if (!tile) return;
+  const k = tile.getAttribute("data-drill");
+  const opening = state.drill !== k;
+  state.drill = opening ? k : null;   // clicking the open tile closes it
+  renderActive();
+  // The detail sits below the charts and rep table, so opening it from a tile at
+  // the top would otherwise land off-screen with no visible feedback.
+  if (opening) {
+    const panel = document.querySelector(".drill");
+    if (panel) {
+      const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      panel.scrollIntoView({ behavior: reduced ? "auto" : "smooth", block: "start" });
+    }
+  }
+});
+function renderAllVisible(){ renderActive(); }
+
+document.getElementById("locSeg").addEventListener("click", e=>{
+  const b = e.target.closest("button"); if(!b) return;
+  state.loc = b.getAttribute("data-loc");
+  state.drill = null;
+  document.querySelectorAll("#locSeg button").forEach(x=>x.classList.toggle("active", x===b));
+  renderAllVisible();
+});
+document.getElementById("rangeSeg").addEventListener("click", e=>{
+  const b = e.target.closest("button"); if(!b) return;
+  state.range = b.getAttribute("data-range");
+  state.drill = null;
+  document.querySelectorAll("#rangeSeg button").forEach(x=>x.classList.toggle("active", x===b));
+  document.getElementById("customRange").classList.toggle("show", state.range==="CUSTOM");
+  renderAllVisible();
+});
+document.getElementById("customStart").addEventListener("change", e=>{ state.customStart = new Date(e.target.value); renderAllVisible(); });
+document.getElementById("customEnd").addEventListener("change", e=>{ state.customEnd = new Date(e.target.value); renderAllVisible(); });
+
+(function initCustomDates(){
+  document.getElementById("customStart").value = dkey(state.customStart);
+  document.getElementById("customEnd").value = dkey(state.customEnd);
+})();
+
+buildShell();
+renderActive();
+
+// Target caption, assembled from whichever targets are actually configured.
+function targetCaption(){
+  const bits = [];
+  if (TARGETS.avgTicket) bits.push(`avg ticket target ${fmtUSD0(TARGETS.avgTicket)}`);
+  if (TARGETS.membershipAttachPct) bits.push(`membership target ${TARGETS.membershipAttachPct}%`);
+  if (TARGETS.lowTicketPct) bits.push(`low-ticket target \u2264${TARGETS.lowTicketPct}%`);
+  if (TARGETS.optionsPerCall) bits.push(`options/appt target ${TARGETS.optionsPerCall}`);
+  return bits.length ? bits.join(" \u00b7 ")
+                     : "No targets configured \u2014 set them in config.json to show target lines.";
+}
+
+// Header, location toggle and footer are all filled from config so the same
+// file serves a one-location shop and a multi-location roll-up.
+(function buildChrome(){
+  const c = CONFIG.company || {};
+  const name = c.name || "Operations Dashboard";
+  document.title = c.subtitle ? `${name} \u2014 ${c.subtitle}` : name;
+  document.getElementById("srTitle").textContent = c.subtitle ? `${name} \u2014 ${c.subtitle}` : name;
+
+  const light = document.getElementById("logoLight"), dark = document.getElementById("logoDark");
+  const hasLight = light.getAttribute("src") && light.getAttribute("src").length > 40;
+  if (hasLight) {
+    light.hidden = false; light.alt = name;
+    if (dark.getAttribute("src") && dark.getAttribute("src").length > 40) dark.hidden = false;
+    else { light.classList.remove("light-only"); }   // one logo, used in both themes
+  } else {
+    const w = document.getElementById("wordmark");
+    w.textContent = name; w.hidden = false;
+  }
+
+  const sub = [c.subtitle, c.locationsLabel].filter(Boolean).join("  \u00b7  ");
+  document.getElementById("brandSub").textContent = sub;
+
+  // A single-location account has nothing to toggle between.
+  const seg = document.getElementById("locSeg");
+  if (LOCATIONS.length < 2) {
+    seg.closest(".filter-group").hidden = true;
+  } else {
+    seg.innerHTML = `<button data-loc="ALL" class="active">Combined</button>` +
+      LOCATIONS.map(l => `<button data-loc="${escAttr(l.id)}">${escXML(l.name)}</button>`).join("");
+  }
+
+  document.getElementById("footNote").textContent =
+    `${name} \u00b7 Internal operations dashboard \u00b7 All figures pull live from ServiceTitan. ` +
+    `Booked revenue reflects jobs priced on the dispatch board; membership attach is derived from ` +
+    `same-day membership sales.`;
+
+  if (LIVE_DATA.isDemo) {
+    const b = document.createElement("div");
+    b.className = "demo-banner";
+    b.textContent = "DEMO DATA \u2014 these figures are randomly generated and describe no real business. "
+                  + "Connect ServiceTitan and run fetch_dashboard_data.py for live numbers.";
+    document.body.insertBefore(b, document.body.firstChild);
+  }
+})();
+
+(function setDataStatusBadge(){
+  const el = document.getElementById("dataStatusBadge");
+  const genOn = new Date(LIVE_DATA.generatedAt);
+  const stamp = genOn.toLocaleString("en-US", { month:"short", day:"numeric", hour:"numeric", minute:"2-digit" });
+  // The refresh runs 3x daily, so anything past ~12h old means a run was missed
+  // and the board may have moved on -- flag it rather than presenting it as current.
+  const hoursOld = (Date.now() - genOn) / 3600000;
+  const stale = hoursOld > 12;
+  el.classList.toggle("stale", stale);
+  el.innerHTML = `<span class="dot"></span>${LIVE_DATA.isDemo ? "Demo data" : "Live from ServiceTitan"} · ${stamp}` +
+    (stale ? ` · ${Math.floor(hoursOld/24) >= 1 ? Math.floor(hoursOld/24)+"d" : Math.floor(hoursOld)+"h"} old` : "");
+})();
+</script>
+</body>
+</html>
