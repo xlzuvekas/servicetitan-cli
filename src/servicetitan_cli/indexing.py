@@ -18,7 +18,14 @@ Everything stays on this machine. Embeddings are computed locally (fastembed's
 ONNX models by default, cached under ``<config dir>/index/models``) and the
 index is plain JSON under ``<config dir>/index/<profile>/``, owner-only. No
 language model runs here: ``index query`` returns the closest documents and the
-calling agent does the reasoning. Snapshots hold customer names and revenue, so
+calling agent does the reasoning.
+
+Search is hybrid. The question is embedded and compared with every stored
+vector (meaning), and matched token for token against a small BM25 index kept
+beside the vectors (exact things: job and invoice numbers, tenant ids, dates,
+amounts), the two rankings are fused, and hits that contain a rare identifier
+from the query are pinned to the top. ``--rerank cross`` re-scores the top
+candidates with a local cross-encoder when ordering matters more than speed. Snapshots hold customer names and revenue, so
 a hosted embedding service is never used unless a person configures one
 explicitly (``huggingface:`` and ``ollama:`` run locally too; ``hash`` needs no
 download at all and is crude).
@@ -26,6 +33,7 @@ download at all and is crude).
 LlamaIndex is an optional extra: ``pip install "servicetitan-cli[index]"``.
 Saving results with ``--save`` needs nothing extra; they land on disk either way.
 """
+import collections
 import contextlib
 import datetime as dt
 import glob
@@ -55,6 +63,15 @@ CHUNK_WORDS = 220
 CHUNK_OVERLAP = 30
 MAX_RESULT_RECORDS = 5000      # per saved result; beyond that only the summary document is indexed
 MANIFEST = "manifest.json"
+LEXICAL = "lexical.json"        # BM25 postings plus every chunk's text and metadata, built beside the vectors
+VECTORS = "vectors.npy"         # the embedding matrix in lexical.json node order; queries never load the LlamaIndex index
+FORMAT = 2                      # bump when lexical.json / vectors.npy change shape; older indexes must be rebuilt
+BM25_K1, BM25_B = 1.5, 0.75
+RRF_K = 60                      # reciprocal-rank fusion constant
+MODES = ("hybrid", "vector", "lexical")
+DEFAULT_RERANK = "none"
+CROSS_ENCODER_DEFAULT = "Xenova/ms-marco-MiniLM-L-6-v2"
+EMBED_BATCH = 256               # texts per model call; LlamaIndex's default of 10 starves the ONNX runtime
 
 
 # ---------------------------------------------------------------- locations
@@ -181,11 +198,13 @@ def make_embed_model(spec):
         if backend == "fastembed":
             from llama_index.embeddings.fastembed import FastEmbedEmbedding
             ensure_dir(models_dir())
-            return FastEmbedEmbedding(model_name=model or DEFAULT_EMBED.split(":", 1)[1], cache_dir=models_dir())
+            return FastEmbedEmbedding(model_name=model or DEFAULT_EMBED.split(":", 1)[1], cache_dir=models_dir(),
+                                      embed_batch_size=EMBED_BATCH)
         if backend == "huggingface":
             from llama_index.embeddings.huggingface import HuggingFaceEmbedding
             ensure_dir(models_dir())
-            return HuggingFaceEmbedding(model_name=model or "BAAI/bge-small-en-v1.5", cache_folder=models_dir())
+            return HuggingFaceEmbedding(model_name=model or "BAAI/bge-small-en-v1.5", cache_folder=models_dir(),
+                                        embed_batch_size=EMBED_BATCH)
         if backend == "ollama":
             from llama_index.embeddings.ollama import OllamaEmbedding
             return OllamaEmbedding(model_name=model or "nomic-embed-text")
@@ -559,6 +578,197 @@ def _splitter(li):
     return li.SentenceSplitter(chunk_size=CHUNK_WORDS, chunk_overlap=CHUNK_OVERLAP, tokenizer=lambda t: t.split())
 
 
+# ---------------------------------------------------------------- lexical index (exact tokens)
+_TOKEN_RE = re.compile(r"[a-z0-9][a-z0-9:_./-]*[a-z0-9]|[a-z0-9]")
+_SPLIT_RE = re.compile(r"[:_./-]")
+
+
+def tokens(text):
+    """Lowercase tokens that keep identifiers whole and also split them.
+
+    'SPR:5510' -> spr:5510, spr, 5510; '$1,200.00' -> 1200.00, 1200; '2026-08-01' -> 2026-08-01, 2026, 08, 01;
+    'INV-2231' -> inv-2231, inv, 2231. Embedding models are poor at exact numbers; this side is exact.
+    """
+    text = re.sub(r"(?<=\d),(?=\d)", "", (text or "").lower())
+    out = []
+    for raw in _TOKEN_RE.findall(text):
+        out.append(raw)
+        parts = [p for p in _SPLIT_RE.split(raw) if p]
+        if len(parts) > 1:
+            out.extend(parts)
+        if re.fullmatch(r"\d+\.\d+", raw):
+            out.append(raw.split(".", 1)[0])
+    return out
+
+
+def identifier_tokens(q_tokens):
+    """Query tokens that look like identifiers: three or more characters with a digit."""
+    return [t for t in dict.fromkeys(q_tokens) if len(t) >= 3 and any(ch.isdigit() for ch in t)]
+
+
+def _node_text(li, node):
+    md = node.metadata or {}
+    extra = " ".join(str(md[k]) for k in ("name", "number", "id", "recordId") if md.get(k))
+    return node.get_content(metadata_mode=li.MetadataMode.NONE) + " " + extra
+
+
+def build_lexical(li, index, path):
+    """BM25 postings for every chunk in the docstore; rebuilt after each build (cheap) and written beside the vectors."""
+    nodes, postings = [], {}
+    for i, (node_id, node) in enumerate(index.docstore.docs.items()):
+        toks = tokens(_node_text(li, node))
+        md = node.metadata or {}
+        nodes.append({"id": node_id, "len": len(toks), "kind": md.get("kind"), "tenant": md.get("tenant"),
+                      "date": md.get("date"), "name": md.get("name"),
+                      "text": node.get_content(metadata_mode=li.MetadataMode.NONE), "metadata": md})
+        for t, tf in collections.Counter(toks).items():
+            postings.setdefault(t, []).append([i, tf])
+    doc = {"version": FORMAT, "nodes": nodes, "postings": postings,
+           "avgdl": (sum(n["len"] for n in nodes) / float(len(nodes))) if nodes else 0.0}
+    write_private(os.path.join(path, LEXICAL), json.dumps(doc, separators=(",", ":")))
+    return {"nodes": len(nodes), "tokens": len(postings)}, [n["id"] for n in nodes]
+
+
+def write_vectors(index, path, node_ids):
+    """Persist the embedding matrix (float32, one row per lexical.json node) so queries skip LlamaIndex entirely."""
+    import numpy as np
+    data = getattr(getattr(index, "vector_store", None), "_data", None)
+    emb = getattr(data, "embedding_dict", None)
+    if emb is None:                                   # fall back to the store's own persisted file
+        with open(os.path.join(path, "default__vector_store.json"), encoding="utf-8") as f:
+            emb = json.load(f).get("embedding_dict") or {}
+    dim = len(next(iter(emb.values()))) if emb else 0
+    mat = np.zeros((len(node_ids), dim), dtype=np.float32)
+    missing = 0
+    for i, nid in enumerate(node_ids):
+        v = emb.get(nid)
+        if v is None:
+            missing += 1
+            continue
+        mat[i] = np.asarray(v, dtype=np.float32)
+    np.save(os.path.join(path, VECTORS), mat)
+    return {"rows": int(mat.shape[0]), "dim": dim, "missing": missing}
+
+
+def load_vectors(path):
+    try:
+        import numpy as np
+        return np.load(os.path.join(path, VECTORS))
+    except (OSError, ValueError, ImportError):
+        return None
+
+
+def vector_search(lex, vectors, embed_model, text, allow, k):
+    """Cosine similarity of the query against every stored vector that passes the filter; [(node_id, score)]."""
+    import numpy as np
+    q = np.asarray(embed_model.get_query_embedding(text), dtype=np.float32)
+    if vectors is None or vectors.shape[0] == 0 or vectors.shape[1] != q.shape[0]:
+        return []
+    norms = np.linalg.norm(vectors, axis=1)
+    norms[norms == 0] = 1.0
+    sims = vectors @ q / (norms * (float(np.linalg.norm(q)) or 1.0))
+    mask = np.fromiter((bool(allow(n)) for n in lex["nodes"]), dtype=bool, count=len(lex["nodes"]))
+    sims = np.where(mask, sims, -np.inf)
+    order = np.argsort(-sims)[:k]
+    return [(lex["nodes"][i]["id"], round(float(sims[i]), 4)) for i in order if sims[i] > -np.inf]
+
+
+def load_lexical(path):
+    try:
+        with open(os.path.join(path, LEXICAL), encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return None
+
+
+def _idf(lex, df):
+    n = len(lex["nodes"])
+    return math.log(1.0 + (n - df + 0.5) / (df + 0.5))
+
+
+def lexical_search(lex, q_tokens, allow, k):
+    """BM25 over the postings; returns [(node_id, score)] best first."""
+    avgdl = lex.get("avgdl") or 1.0
+    scores = {}
+    for t in dict.fromkeys(q_tokens):
+        plist = lex["postings"].get(t)
+        if not plist:
+            continue
+        idf = _idf(lex, len(plist))
+        for i, tf in plist:
+            node = lex["nodes"][i]
+            if not allow(node):
+                continue
+            denom = tf + BM25_K1 * (1.0 - BM25_B + BM25_B * node["len"] / avgdl)
+            scores[i] = scores.get(i, 0.0) + idf * tf * (BM25_K1 + 1.0) / denom
+    ranked = sorted(scores.items(), key=lambda x: -x[1])[:k]
+    return [(lex["nodes"][i]["id"], round(sc, 4)) for i, sc in ranked]
+
+
+def exact_matches(lex, q_tokens, allow):
+    """{node_id: [identifier tokens it contains]} for rare identifiers in the query.
+
+    A token is treated as an identifier when it looks like one and is rare in the index (a year or a day
+    number appears everywhere and is left to BM25).
+    """
+    cap = max(10, int(0.005 * len(lex["nodes"])))
+    out = {}
+    for t in identifier_tokens(q_tokens):
+        plist = lex["postings"].get(t) or []
+        if not plist or len(plist) > cap:
+            continue
+        for i, _tf in plist:
+            node = lex["nodes"][i]
+            if allow(node):
+                out.setdefault(node["id"], []).append(t)
+    return out
+
+
+def _allow_fn(kinds, tenant, since, until, name):
+    """The lexical side's version of the vector store filters (node summaries carry kind, tenant, date, name)."""
+    kinds = set(kinds or [])
+    tenant = str(tenant).upper() if tenant else None
+    name = name.lower() if name else None
+
+    def allow(n):
+        if kinds and n.get("kind") not in kinds:
+            return False
+        if tenant and n.get("tenant") != tenant:
+            return False
+        if since and not (n.get("date") and n["date"] >= since):
+            return False
+        if until and not (n.get("date") and n["date"] <= until):
+            return False
+        if name and name not in str(n.get("name") or "").lower():
+            return False
+        return True
+    return allow
+
+
+# ---------------------------------------------------------------- reranker (opt-in)
+def rerank_spec(explicit=None, environ=None):
+    environ = os.environ if environ is None else environ
+    return (explicit or environ.get("SERVICETITAN_RERANK") or DEFAULT_RERANK).strip()
+
+
+def make_reranker(spec):
+    """None, or a fastembed cross-encoder (local ONNX). Model names keep their case."""
+    backend, _, model = spec.partition(":")
+    backend = backend.strip().lower()
+    if backend in ("none", "off", ""):
+        return None
+    if backend in ("cross", "fastembed"):
+        try:
+            from fastembed.rerank.cross_encoder import TextCrossEncoder
+        except ImportError as e:
+            raise ConfigError("The cross-encoder reranker needs fastembed (%s)" % e, code="INDEX_UNAVAILABLE",
+                              hint='pip install "servicetitan-cli[index]"')
+        ensure_dir(models_dir())
+        with contextlib.redirect_stdout(sys.stderr):
+            return TextCrossEncoder(model_name=model or CROSS_ENCODER_DEFAULT, cache_dir=models_dir())
+    raise UsageError("Unknown reranker %r" % spec, hint="Use cross (fastembed's local MiniLM cross-encoder), cross:MODEL, or none.")
+
+
 def collect(ctx, sources, docs_paths=None, snapshot_path=None):
     """Gather documents for the requested sources. Returns (docs, report)."""
     docs, report = [], {}
@@ -654,12 +864,15 @@ def build(ctx, sources=SOURCES, docs_paths=None, embed=None, rebuild=False, snap
                 index.refresh_ref_docs(todo)
         index.storage_context.persist(persist_dir=path)
         total = len(index.ref_doc_info)
-    manifest = {"name": name, "embed": spec, "builtAt": iso_z(dt.datetime.now(UTC)), "cliVersion": __version__,
-                "documents": total, "sources": dict((manifest or {}).get("sources") or {}, **report) if not fresh else report}
+        lexical_info, node_ids = build_lexical(li, index, path)
+        vector_info = write_vectors(index, path, node_ids)
+    manifest = {"name": name, "embed": spec, "format": FORMAT, "builtAt": iso_z(dt.datetime.now(UTC)),
+                "cliVersion": __version__, "documents": total, "lexical": lexical_info, "vectors": vector_info,
+                "sources": dict((manifest or {}).get("sources") or {}, **report) if not fresh else report}
     write_private(os.path.join(path, MANIFEST), json.dumps(manifest, indent=2))
     _lock_down(path)
     out = {"source": "index", "profile": name, "path": path, "embed": spec, "rebuilt": fresh, "documents": total,
-           "sources": report, "seconds": round(time.time() - t0, 1)}
+           "lexical": lexical_info, "vectors": vector_info, "sources": report, "seconds": round(time.time() - t0, 1)}
     out.update(stats)
     out["next"] = "servicetitan index query \"...\" [--kind jobs,invoices,api ...]"
     return out
@@ -680,6 +893,9 @@ def add_documents(ctx, docs, quiet=False):
         index.refresh_ref_docs(_to_documents(li, docs))
         index.storage_context.persist(persist_dir=path)
         manifest["documents"] = len(index.ref_doc_info)
+        manifest["lexical"], node_ids = build_lexical(li, index, path)
+        manifest["vectors"] = write_vectors(index, path, node_ids)
+        manifest["format"] = FORMAT
     manifest["updatedAt"] = iso_z(dt.datetime.now(UTC))
     write_private(os.path.join(path, MANIFEST), json.dumps(manifest, indent=2))
     _lock_down(path)
@@ -698,7 +914,8 @@ def _snapshot_generated_at(path):
 def _summary(ctx, name, manifest):
     path = index_dir(name)
     out = {"profile": name, "path": path, "builtAt": manifest.get("builtAt"), "updatedAt": manifest.get("updatedAt"),
-           "embed": manifest.get("embed"), "documents": manifest.get("documents"), "sources": manifest.get("sources"),
+           "embed": manifest.get("embed"), "documents": manifest.get("documents"), "lexical": manifest.get("lexical"),
+           "vectors": manifest.get("vectors"), "sources": manifest.get("sources"),
            "bytes": sum(os.path.getsize(os.path.join(path, f)) for f in os.listdir(path) if os.path.isfile(os.path.join(path, f)))}
     indexed = ((manifest.get("sources") or {}).get("snapshot") or {})
     current = None
@@ -748,54 +965,129 @@ def _next_command(md):
     return None
 
 
-def query(ctx, text, top=8, kinds=None, tenant=None, all_profiles=False, min_score=None):
-    li = _li()
-    if not (text or "").strip():
+def _open(ctx, pname, mode):
+    """The files a query needs: manifest, lexical.json (always) and vectors.npy (unless lexical mode)."""
+    path = index_dir(pname)
+    manifest = read_manifest(path)
+    if not manifest:
+        raise DataError("No index for profile %r" % pname, code="INDEX_MISSING",
+                        hint="servicetitan index build  (needs a snapshot or saved results first)")
+    lex = load_lexical(path)
+    vectors = load_vectors(path) if mode != "lexical" else None
+    if lex is None or manifest.get("format") != FORMAT or (mode != "lexical" and vectors is None):
+        raise DataError("The index for %r was built by an older version and lacks the search files" % pname,
+                        code="INDEX_MISSING", hint="servicetitan index build --rebuild")
+    return path, manifest, lex, vectors
+
+
+def query(ctx, text, top=8, kinds=None, tenant=None, all_profiles=False, min_score=None, mode="hybrid",
+          since=None, until=None, name=None, rerank=None):
+    """Hybrid retrieval over the persisted search files: cosine over vectors.npy and BM25 over lexical.json, fused by
+    reciprocal rank, rare identifiers pinned first, optional local cross-encoder on top.
+
+    The LlamaIndex index itself is never loaded here (that costs seconds); ``--mode lexical`` needs no model and no
+    LlamaIndex at all, so an exact-number lookup answers in well under a second.
+    """
+    mode = (mode or "hybrid").lower()
+    if mode not in MODES:
+        raise UsageError("Unknown mode %r" % mode, hint="Modes: %s" % ", ".join(MODES))
+    if mode != "lexical":
+        require()
+    text = (text or "").strip()
+    if not text:
         raise UsageError("Give the query some text")
+    for label, value in (("--since", since), ("--until", until)):
+        if value and not re.fullmatch(r"\d{4}-\d{2}-\d{2}", value):
+            raise UsageError("%s must be YYYY-MM-DD" % label)
     kinds = [k.strip().lower() for k in (kinds or []) if k and k.strip()]
     bad = [k for k in kinds if k not in KINDS]
     if bad:
         raise UsageError("Unknown kind(s): %s" % ", ".join(bad), hint="Kinds: %s" % ", ".join(KINDS))
+    spec = rerank_spec(rerank, ctx.environ)
+    reranker = make_reranker(spec)
     if all_profiles:
         names = sorted(n for n in (os.listdir(index_root()) if os.path.isdir(index_root()) else [])
                        if read_manifest(os.path.join(index_root(), n)))
     else:
         names = [index_name(ctx)]
-    hits, indexes = [], []
-    for name in names:
-        manifest = read_manifest(index_dir(name))
-        if not manifest:
-            raise DataError("No index for profile %r" % name, code="INDEX_MISSING",
-                            hint="servicetitan index build  (needs a snapshot or saved results first)")
-        summary = _summary(ctx, name, manifest)
+    q_tokens = tokens(text)
+    candidates = max(top * 5, 40)
+    allow = _allow_fn(kinds, tenant, since, until, name)
+    cands, indexes = [], []
+    counts = {"vectorCandidates": 0, "lexicalCandidates": 0}
+    models = {}
+    for pname in names:
+        path, manifest, lex, vectors = _open(ctx, pname, mode)
+        summary = _summary(ctx, pname, manifest)
         indexes.append(summary)
         if summary["stale"]:
             ctx.warnings.append("index for %r is behind: %s; run `servicetitan index build`"
-                                % (name, "the snapshot changed" if summary["snapshot"]["changed"] else "results were saved since"))
-        embed_model = make_embed_model(manifest["embed"])
-        with contextlib.redirect_stdout(sys.stderr):
-            index = li.load_index_from_storage(li.StorageContext.from_defaults(persist_dir=index_dir(name)), embed_model=embed_model)
-            filters = []
-            if kinds:
-                filters.append(li.MetadataFilter(key="kind", value=kinds, operator=li.FilterOperator.IN))
-            if tenant:
-                filters.append(li.MetadataFilter(key="tenant", value=str(tenant).upper()))
-            retriever = index.as_retriever(similarity_top_k=top, filters=li.MetadataFilters(filters=filters) if filters else None)
-            nodes = retriever.retrieve(text)
-        for n in nodes:
-            md = dict(n.node.metadata or {})
-            score = round(float(n.score), 4) if n.score is not None else None
-            if min_score is not None and score is not None and score < min_score:
+                                % (pname, "the snapshot changed" if summary["snapshot"]["changed"] else "results were saved since"))
+        by_id = {n["id"]: n for n in lex["nodes"]}
+        vec, lexi, exact = [], [], {}
+        if mode != "lexical":
+            if manifest["embed"] not in models:
+                models[manifest["embed"]] = make_embed_model(manifest["embed"])
+            with contextlib.redirect_stdout(sys.stderr):
+                vec = vector_search(lex, vectors, models[manifest["embed"]], text, allow, candidates)
+        if mode != "vector":
+            lexi = lexical_search(lex, q_tokens, allow, candidates)
+            exact = exact_matches(lex, q_tokens, allow)
+        counts["vectorCandidates"] += len(vec)
+        counts["lexicalCandidates"] += len(lexi)
+        vscore = dict(vec)
+        lscore = dict(lexi)
+        fused = {}
+        for rank, (nid, _) in enumerate(vec):
+            fused[nid] = fused.get(nid, 0.0) + 1.0 / (RRF_K + rank + 1)
+        for rank, (nid, _) in enumerate(lexi):
+            fused[nid] = fused.get(nid, 0.0) + 1.0 / (RRF_K + rank + 1)
+        for nid in exact:
+            fused.setdefault(nid, 0.0)
+        for nid, f in fused.items():
+            node = by_id.get(nid)
+            if node is None:
                 continue
-            hit = {"score": score, "kind": md.get("kind"), "id": md.get("id"), "profile": name, "tenant": md.get("tenant"),
-                   "name": md.get("name"), "date": md.get("date"), "text": n.node.get_content(metadata_mode=li.MetadataMode.NONE),
-                   "next": _next_command(md)}
-            extra = {k: v for k, v in md.items() if k not in ("kind", "id", "tenant", "name", "date")}
-            if extra:
-                hit["metadata"] = extra
-            hits.append(hit)
-    hits.sort(key=lambda h: (h["score"] is None, -(h["score"] or 0.0)))
-    hits = hits[:top]
-    return {"source": "index", "query": text, "top": top, "filters": {"kind": kinds or None, "tenant": (str(tenant).upper() if tenant else None)},
-            "profiles": names, "indexes": indexes, "count": len(hits), "hits": hits,
-            "note": "Retrieval only; scores are cosine similarities from the local embedding model. Confirm figures with list/metrics."}
+            cands.append({"node": node, "profile": pname, "fused": f, "vector": vscore.get(nid), "lexical": lscore.get(nid),
+                          "matched": exact.get(nid, []), "rerank": None})
+    top_f = max((c["fused"] for c in cands), default=0.0) or 1.0
+    for c in cands:
+        c["score"] = round(c["fused"] / top_f, 4)
+    cands.sort(key=lambda c: (0 if c["matched"] else 1, -c["fused"]))
+    if reranker is not None and cands:
+        head = cands[:min(len(cands), max(top * 3, 20))]
+        with contextlib.redirect_stdout(sys.stderr):
+            logits = [float(x) for x in reranker.rerank(text, [c["node"].get("text") or "" for c in head])]
+        lo, hi = min(logits), max(logits)
+        for c, logit in zip(head, logits):
+            c["rerank"] = round(logit, 4)
+            c["score"] = round((logit - lo) / (hi - lo), 4) if hi > lo else 1.0    # best candidate is 1.0, like fused
+        head.sort(key=lambda c: (0 if c["matched"] else 1, -c["score"]))
+        cands = head + cands[len(head):]
+    hits = []
+    for c in cands:
+        if min_score is not None and c["score"] < min_score:
+            continue
+        md = dict(c["node"].get("metadata") or {})
+        hit = {"score": c["score"], "kind": md.get("kind"), "id": md.get("id"), "profile": c["profile"], "tenant": md.get("tenant"),
+               "name": md.get("name"), "date": md.get("date"), "text": c["node"].get("text") or "", "next": _next_command(md),
+               "scores": {"vector": c["vector"], "lexical": c["lexical"], "fused": round(c["fused"], 5), "rerank": c["rerank"]}}
+        if c["matched"]:
+            hit["matched"] = c["matched"]
+        extra = {k: v for k, v in md.items() if k not in ("kind", "id", "tenant", "name", "date")}
+        if extra:
+            hit["metadata"] = extra
+        hits.append(hit)
+        if len(hits) >= top:
+            break
+    retrieval = dict(counts, mode=mode, fusion="rrf" if mode == "hybrid" else None,
+                     exactMatches=sum(1 for c in cands if c["matched"]), reranker=spec if reranker is not None else None,
+                     queryTokens=identifier_tokens(q_tokens))
+    return {"source": "index", "query": text, "top": top,
+            "filters": {"kind": kinds or None, "tenant": (str(tenant).upper() if tenant else None), "since": since, "until": until,
+                        "name": name},
+            "profiles": names, "indexes": indexes, "retrieval": retrieval, "count": len(hits), "hits": hits,
+            "note": "Retrieval only. score is scaled so the best candidate is 1.0 (fused rank score, or the cross-encoder's score "
+                    "with --rerank cross); scores.vector is cosine similarity, scores.lexical is BM25, scores.rerank the raw "
+                    "cross-encoder logit. Hits carrying a rare identifier from the query are listed first and say which one in "
+                    "`matched`. Confirm figures with list/metrics."}

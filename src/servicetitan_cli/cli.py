@@ -308,7 +308,16 @@ def build_parser():
     x.add_argument("--kind", metavar="A,B", help="restrict to kinds: jobs, opportunities, invoices, purchase-orders, calls, "
                                               "memberships, technicians, campaigns, business-units, people, result, api, "
                                               "definition, doc")
-    x.add_argument("--min-score", type=float, help="drop hits below this similarity")
+    x.add_argument("--min-score", type=float, help="drop hits below this score")
+    x.add_argument("--mode", choices=("hybrid", "vector", "lexical"), default="hybrid",
+                   help="hybrid (default): meaning and exact tokens fused; vector: meaning only; lexical: exact tokens only "
+                        "(BM25; loads no embedding model)")
+    x.add_argument("--since", metavar="YYYY-MM-DD", help="only records dated on or after this (documents without a date drop out)")
+    x.add_argument("--until", metavar="YYYY-MM-DD", help="only records dated on or before this")
+    x.add_argument("--name", metavar="TEXT", help="only documents whose name (customer, person, vendor, title) contains this")
+    x.add_argument("--rerank", metavar="cross[:MODEL]|none",
+                   help="re-score the top candidates with a local cross-encoder (fastembed MiniLM: one more 80 MB model, about "
+                        "4 s per query); default none; also SERVICETITAN_RERANK")
     x.add_argument("--all-profiles", action="store_true", help="search every profile's index on this machine")
     x = _sub(ips, "results", "saved command results (--save): list them, or --show one")
     x.add_argument("--limit", type=int, default=50)
@@ -1022,7 +1031,8 @@ def cmd_index(ctx, args):
     if action == "query":
         kinds = [k for k in (args.kind or "").split(",") if k.strip()]
         return indexing.query(ctx, args.text, top=args.top, kinds=kinds, tenant=_opt(args, "tenant"),
-                              all_profiles=args.all_profiles, min_score=args.min_score)
+                              all_profiles=args.all_profiles, min_score=args.min_score, mode=args.mode, since=args.since,
+                              until=args.until, name=args.name, rerank=args.rerank)
     if action == "results":
         return indexing.list_results(ctx, limit=args.limit, show=args.show)
     raise UsageError("index needs an action", hint="build, status, query or results")

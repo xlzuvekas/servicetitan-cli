@@ -199,11 +199,26 @@ servicetitan index status                                   # what is indexed, f
 servicetitan fetch --index                                  # pull a snapshot and update the index in one go
 ```
 
-`query` is retrieval only: it returns hits with a similarity score, the record's
-kind, tenant and id, the text that matched, and a `next` command that fetches
-the exact record. The calling agent does the reasoning, and confirms figures
-with `list` or `metrics` before quoting them. Building is incremental, so a
-daily `fetch --index` only embeds what changed.
+Search is hybrid. The question is embedded and compared with every stored
+vector, and at the same time matched token for token against a small BM25
+index kept beside the vectors, so exact things (job and invoice numbers,
+tenant ids, dates, amounts) are found even though embedding models are poor at
+them. The two rankings are fused, hits that contain a rare identifier from the
+query are pinned to the top and say so in `matched`, and `--kind`, `--tenant`,
+`--since`, `--until` and `--name` narrow the search before ranking. `--mode
+lexical` or `--mode vector` uses one side only; lexical mode loads no model and
+answers an exact-number lookup in well under a second. `--rerank cross`
+re-scores the top candidates with a local MiniLM cross-encoder (one more 80 MB
+model, about four seconds per query) when ordering matters more than speed.
+Queries read two small files the build writes beside the LlamaIndex store
+(`lexical.json`, `vectors.npy`) rather than loading the index itself, so a
+hybrid query costs the embedding model's start-up and little else.
+
+`query` is retrieval only: hits carry a score, the record's kind, tenant and
+id, the text that matched, and a `next` command that fetches the exact record.
+The calling agent does the reasoning, and confirms figures with `list` or
+`metrics` before quoting them. Building is incremental, so a daily
+`fetch --index` only embeds what changed.
 
 Everything stays on the machine. Embeddings are computed locally with
 [fastembed](https://github.com/qdrant/fastembed) (ONNX, no compiler, model

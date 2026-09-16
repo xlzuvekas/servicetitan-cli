@@ -50,7 +50,7 @@ Python 3.9+, `requests` + `keyring` only. Source in `src/servicetitan_cli/`, tes
 | `apitree.py` | Builds an argparse parser per operation from the catalogue and executes it; writes pass through `authorize_write` (flag, allowlist, scope) and `execute_write` (body, dry run, confirmation, audit). |
 | `writes.py` | Write policy: allowlist patterns, request-body assembly and validation, terminal confirmation, audit log. |
 | `catalogue.py` | Builds a catalogue from OpenAPI documents (naming rules, hashes, versions, deprecation), refreshes from the live portal into the config dir, diffs two catalogues. |
-| `indexing.py` | Local LlamaIndex: documents from snapshot records, saved results (`--save`), the catalogue, definitions and docs; build/update, status, query, results store. Lazy imports; `hash` embeddings for tests. |
+| `indexing.py` | Local LlamaIndex: documents from snapshot records, saved results (`--save`), the catalogue, definitions and docs; build/update, status, results store; hybrid query (vectors + BM25 `lexical.json`, RRF fusion, rare identifiers pinned, optional local cross-encoder). Lazy imports; `hash` embeddings for tests. |
 | `brief.py` | `servicetitan brief`: a selection from the metrics areas for one-call orientation; no new math. |
 | `render.py` + `data/dashboard_template.html` | The single-file dashboard. |
 | `schema.py` | `servicetitan schema`; derived from the parser, so new commands appear automatically. |
