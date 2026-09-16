@@ -56,7 +56,7 @@ SNAPSHOT_RECORDS = {
     "opportunities": "One per job's estimate presentation (estimates grouped by jobId). Fields: id, loc, dept, customer, city, jobNumber, title, presentedOn, wonOn, won, options, owner, value (sold options only), topOption.",
     "ar": "Open invoices with an invoice date and balance > 0. Fields: id, invoiceNumber, loc, customer, invoiceDate, dueDate, balance, total, businessUnit.",
     "purchaseOrders": "Purchase orders not Received/Canceled. Fields: id, number, loc, vendor, date, total, status.",
-    "calls": "Call log rolled up per (date, agent, campaign, direction). Fields: date, loc, agentName, campaign, inbound, n, booked, abandoned.",
+    "calls": "Call log rolled up per (date, agent, campaign, direction). Fields: date, loc, agentName, campaign, inbound, n, booked, abandoned, unbooked, excused, notLead (callType counts; outbound calls have no type).",
     "memberships": "Customer memberships. Fields: id, loc, status, type (plan), customer, from, to, soldBy.",
     "technicians": "Roster incl. inactive (historical jobs reference them). Fields: id, name, loc, dept, active.",
     "businessUnits": "Fields: id, loc, name, dept (None = excluded), active.",

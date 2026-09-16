@@ -96,7 +96,8 @@ class Query(object):
             if d is None:
                 continue
             self.calls.append(dict(c, dt=d.replace(hour=12), n=int(c.get("n") or 0), booked=int(c.get("booked") or 0),
-                                   abandoned=int(c.get("abandoned") or 0), inbound=bool(c.get("inbound"))))
+                                   abandoned=int(c.get("abandoned") or 0), unbooked=int(c.get("unbooked") or 0),
+                                   excused=int(c.get("excused") or 0), inbound=bool(c.get("inbound"))))
         self.memberships = [dict(m, start_dt=self._dt(m.get("from")), renew_dt=self._dt(m.get("to")),
                                  active=(m.get("status") == "Active")) for m in self.data.get("memberships") or []]
         self.technicians = self.data.get("technicians") or []
@@ -472,6 +473,8 @@ def office(q):
     outbound = sum(c["n"] for c in allc if not c["inbound"])
     booked = sum(c["booked"] for c in inbound)
     abandoned = sum(c["abandoned"] for c in inbound)
+    unbooked = sum(c["unbooked"] for c in inbound)
+    excused = sum(c["excused"] for c in inbound)
     gran = granularity(q.start, q.end)
     by_bucket = defaultdict(lambda: {"calls": 0, "booked": 0, "abandoned": 0})
     for c in inbound:
@@ -496,6 +499,8 @@ def office(q):
     out.update({
         "kpis": {"inboundCalls": inbound_n, "outboundCalls": outbound, "booked": booked,
                  "bookRatePct": pct(booked, inbound_n), "abandoned": abandoned, "abandonRatePct": pct(abandoned, inbound_n),
+                 "unbooked": unbooked, "excused": excused,
+                 "bookRateOfBookableCallsPct": pct(booked, booked + unbooked) if (booked + unbooked) else None,
                  "inboundReachedNoAgent": unanswered},
         "callVolume": {"granularity": gran, "points": series},
         "agents": agents,
@@ -566,7 +571,7 @@ DEFINITIONS = {
     "accounting": {
         "totalAR": "Balances on invoices that carry an invoice date. Balances on undated (not yet issued) invoices are excluded because they are unbilled future work.",
         "arAging": "Days past the due date (falling back to the invoice date), bucketed 0-30/31-60/61-90/91-120/120+.",
-        "committedOnOpenPOs": "Total of purchase orders not yet Received or Canceled. This is committed spend, not accounts payable.",
+        "committedOnOpenPOs": "Total of purchase orders in Pending, Sent or PartiallyReceived status (Received, Exported and Canceled are closed). This is committed spend, not accounts payable; vendor bills are available live via `servicetitan api accounting ap-bills list` and are not in the snapshot.",
     },
     "marketing": {
         "attributedRevenue": "Completed revenue in the range attributed directly to the job's campaignId; inbound calls come from the call log's campaign.",
@@ -574,6 +579,7 @@ DEFINITIONS = {
     },
     "office": {
         "bookRatePct": "Booked inbound calls over all inbound calls (outbound dials are reported separately and never dilute the rate).",
+        "bookRateOfBookableCallsPct": "Booked over booked plus unbooked, i.e. ignoring excused, abandoned and not-a-lead calls; null when the snapshot predates these counts. ServiceTitan call types: Booked, Unbooked, Excused, Abandoned, NotLead.",
         "abandonRatePct": "Abandoned inbound calls over all inbound calls; reported company-wide because abandoned calls reach no agent.",
         "agents": "Answered inbound calls per agent (calls minus abandoned) and how many were booked.",
     },

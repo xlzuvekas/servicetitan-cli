@@ -74,7 +74,8 @@ def fake_data():
             {"id": 402, "balance": 0, "invoiceDate": "2026-08-01T00:00:00Z"},
         ],
         "purchase-orders": [{"id": 600, "vendorId": 61, "status": "Pending", "total": "80.5", "date": "2026-09-01", "number": "PO-600"},
-                            {"id": 601, "vendorId": 61, "status": "Received", "total": 999}],
+                            {"id": 601, "vendorId": 61, "status": "Received", "total": 999},
+                            {"id": 602, "vendorId": 61, "status": "Exported", "total": 500}],
         "vendors": [{"id": 61, "name": "Parts Co"}],
         "campaigns": [{"id": 700, "name": " Referral ", "category": {"name": "Referral"}, "active": True}],
         "calls": [
@@ -84,6 +85,8 @@ def fake_data():
                                    "agent": {"name": "Agent A"}, "campaign": {"id": 700}}},
             {"id": 3, "leadCall": {"createdOn": "2026-09-04T12:00:00Z", "direction": "Inbound", "callType": "Abandoned"}},
             {"id": 4, "leadCall": {}},
+            {"id": 5, "leadCall": {"receivedOn": "2026-09-04T13:00:00Z", "direction": "Inbound", "callType": "Excused",
+                                   "agent": {"name": "Agent A"}, "campaign": {"id": 700}}},
         ],
     }
 
@@ -135,17 +138,20 @@ def test_pull_tenant_applies_the_rules():
     assert [a["id"] for a in out["ar"]] == ["SPR:400"] and out["ar"][0]["balance"] == 250.0
     assert out["ar"][0]["invoiceNumber"] == "INV-400" and out["stats"]["unbilledInvoicesExcluded"] == 1
     inv_params = [p for path, p in client.calls if path.endswith("invoices")][0]
-    assert inv_params == {"invoicedOnOrAfter": "2025-01-01T00:00:00Z"}
+    assert inv_params == {"invoicedOnOrAfter": "2025-01-01T00:00:00Z", "balanceFilter.Balance": 0, "balanceFilter.Comparer": "Greater"}
+    calls_path = [path for path, p in client.calls if path.endswith("calls")][0]
+    assert calls_path == "telecom/v3/calls"
     for roster in ("technicians", "employees", "business-units", "customers", "campaigns", "vendors"):
         assert [p for path, p in client.calls if path.endswith(roster)][0].get("active") == "Any", roster
 
     assert [p["id"] for p in out["purchaseOrders"]] == ["SPR:600"] and out["purchaseOrders"][0]["vendor"] == "Parts Co"
-    assert out["poTotals"] == {"SPR": 2}
+    assert out["poTotals"] == {"SPR": 3}
     assert out["campaigns"][0]["name"] == "Referral" and out["campaigns"][0]["category"] == "Referral"
 
     calls = {(c["date"], c["agentName"], c["campaign"]): c for c in out["calls"]}
-    assert calls[("2026-09-04", "Agent A", "SPR:700")]["n"] == 2 and calls[("2026-09-04", "Agent A", "SPR:700")]["booked"] == 1
-    assert calls[("2026-09-04", None, None)]["abandoned"] == 1 and out["rawCallCount"] == 4
+    agent_row = calls[("2026-09-04", "Agent A", "SPR:700")]
+    assert agent_row["n"] == 3 and agent_row["booked"] == 1 and agent_row["unbooked"] == 1 and agent_row["excused"] == 1
+    assert calls[("2026-09-04", None, None)]["abandoned"] == 1 and out["rawCallCount"] == 5
     assert out["memberships"][0]["type"] == "Comfort Plan" and out["memberships"][0]["soldBy"] == "SPR:10"
     assert out["technicians"][0]["dept"] == "Service" and out["businessUnits"][2]["dept"] is None
 

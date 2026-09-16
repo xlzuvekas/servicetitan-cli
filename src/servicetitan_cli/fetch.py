@@ -34,7 +34,8 @@ assigned technician. Owners still unresolved are looked up individually.
 MEMBERSHIP ATTACH is approximate: same customer, same calendar day.
 
 COMMITTED PO SPEND is not accounts payable; it is unreceived purchase-order
-value, labelled that way.
+value, labelled that way. Vendor bills do exist in the API (accounting
+ap-bills and inventory-bills); they are not part of the snapshot yet.
 
 CALLS are rolled up to one row per (day, agent, campaign, direction); the
 dashboard only shows counts, so this is lossless and much smaller.
@@ -47,7 +48,9 @@ from .dates import UTC, iso_z
 from .errors import ApiError
 from .output import progress as _progress
 
-PO_CLOSED_STATUSES = {"Received", "Canceled", "Cancelled"}
+# Purchase-order statuses: Pending, Sent, PartiallyReceived, Received, Exported, Canceled. Exported follows
+# Received (the PO has been pushed to accounting), so it is no longer open commitment.
+PO_CLOSED_STATUSES = {"Received", "Exported", "Canceled", "Cancelled"}
 
 # ServiceTitan's `active` filter defaults to active records only. Rosters and
 # reference data must include inactive rows: completed jobs still reference
@@ -64,7 +67,7 @@ FETCH_ENDPOINTS = (
     "/crm/v2/tenant/{tenant}/customers", "/memberships/v2/tenant/{tenant}/memberships",
     "/memberships/v2/tenant/{tenant}/membership-types", "/accounting/v2/tenant/{tenant}/invoices",
     "/inventory/v2/tenant/{tenant}/purchase-orders", "/inventory/v2/tenant/{tenant}/vendors",
-    "/marketing/v2/tenant/{tenant}/campaigns", "/telecom/v2/tenant/{tenant}/calls",
+    "/marketing/v2/tenant/{tenant}/campaigns", "/telecom/v3/tenant/{tenant}/calls",
 )
 
 
@@ -270,8 +273,10 @@ def pull_tenant(client, cfg, tenant, op_start, ar_start, max_pages=100, log=None
     out["people"] = people
 
     log("[%s] invoices and purchase orders..." % code)
-    # `invoicedOnOrAfter` is the documented filter (the template used an undocumented name and pulled everything).
-    invoices = pages("accounting/v2/invoices", {"invoicedOnOrAfter": ar_start}, "invoices")
+    # `invoicedOnOrAfter` is the documented date filter (the template used an undocumented name and pulled
+    # everything); `balanceFilter` keeps the pull to invoices that still carry a balance, which is all AR needs.
+    invoices = pages("accounting/v2/invoices", {"invoicedOnOrAfter": ar_start, "balanceFilter.Balance": 0,
+                                                "balanceFilter.Comparer": "Greater"}, "invoices")
     unbilled = [i for i in invoices if num(i.get("balance")) > 0 and not i.get("invoiceDate")]
     out["ar"] = [{
         "id": key(i["id"]), "loc": code, "invoiceNumber": i.get("referenceNumber"),
@@ -300,7 +305,9 @@ def pull_tenant(client, cfg, tenant, op_start, ar_start, max_pages=100, log=None
     campaigns = pages("marketing/v2/campaigns", ANY, "campaigns")
     out["campaigns"] = [{"id": key(c["id"]), "loc": code, "name": (c.get("name") or "").strip(),
                          "category": (c.get("category") or {}).get("name"), "active": c.get("active")} for c in campaigns]
-    calls = pages("telecom/v2/calls", {"createdOnOrAfter": op_start}, "calls")
+    # The v2 calls list is tagged deprecated; v3 returns the same {id, jobNumber, leadCall} wrapper.
+    # callType is one of Abandoned, Unbooked, Excused, Booked, NotLead (null on outbound calls).
+    calls = pages("telecom/v3/calls", {"createdOnOrAfter": op_start, "active": "Any"}, "calls")
     agg = {}
     for c in calls:
         lc = c.get("leadCall") or {}
@@ -309,14 +316,22 @@ def pull_tenant(client, cfg, tenant, op_start, ar_start, max_pages=100, log=None
             continue
         k = (when[:10], (lc.get("agent") or {}).get("name") or "",
              key((lc.get("campaign") or {}).get("id")) or "", lc.get("direction") == "Inbound")
-        row = agg.setdefault(k, {"n": 0, "booked": 0, "abandoned": 0})
+        row = agg.setdefault(k, {"n": 0, "booked": 0, "abandoned": 0, "unbooked": 0, "excused": 0, "notLead": 0})
         row["n"] += 1
-        if lc.get("callType") == "Booked":
+        ct = lc.get("callType")
+        if ct == "Booked":
             row["booked"] += 1
-        elif lc.get("callType") == "Abandoned":
+        elif ct == "Abandoned":
             row["abandoned"] += 1
+        elif ct == "Unbooked":
+            row["unbooked"] += 1
+        elif ct == "Excused":
+            row["excused"] += 1
+        elif ct == "NotLead":
+            row["notLead"] += 1
     out["calls"] = [{"date": k[0], "loc": code, "agentName": k[1] or None, "campaign": k[2] or None,
-                     "inbound": k[3], "n": v["n"], "booked": v["booked"], "abandoned": v["abandoned"]}
+                     "inbound": k[3], "n": v["n"], "booked": v["booked"], "abandoned": v["abandoned"],
+                     "unbooked": v["unbooked"], "excused": v["excused"], "notLead": v["notLead"]}
                     for k, v in agg.items()]
     out["rawCallCount"] = len(calls)
 

@@ -148,8 +148,10 @@ def build_demo(cfg, op_start, seed=DEFAULT_SEED, now=None, profile="demo"):
                 if not n:
                     continue
                 booked = sum(1 for _ in range(n) if rng.random() < 0.34)
+                excused = sum(1 for _ in range(n - booked) if rng.random() < 0.2)
                 out["calls"].append({"date": d, "loc": code, "agentName": agent, "campaign": rng.choice(camps),
-                                     "inbound": True, "n": n, "booked": booked, "abandoned": 0})
+                                     "inbound": True, "n": n, "booked": booked, "abandoned": 0,
+                                     "unbooked": n - booked - excused, "excused": excused, "notLead": 0})
             unanswered = rng.randint(0, 4)
             if unanswered:
                 out["calls"].append({"date": d, "loc": code, "agentName": None, "campaign": rng.choice(camps),

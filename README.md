@@ -230,7 +230,8 @@ definitions; the full reasoning is in the docstring of `src/servicetitan_cli/fet
 - **Booked revenue** is the price on the job dated to its next future
   appointment; open jobs with no future appointment are excluded and counted.
 - **AR excludes undated invoices** (pre-created when a job is booked).
-- **Committed on open POs is not accounts payable.**
+- **Committed on open POs is not accounts payable.** Vendor bills are reachable
+  live (`servicetitan api accounting ap-bills list`) but not in the snapshot yet.
 - **Membership attach is approximate:** same customer, same day.
 
 ## Where things live

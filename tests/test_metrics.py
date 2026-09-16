@@ -58,7 +58,7 @@ def hand_snapshot():
         "purchaseOrders": [{"id": "A:p1", "loc": "A", "vendor": "Vendor V", "date": "2026-09-01T00:00:00Z", "total": 700, "status": "Pending"}],
         "poTotals": {"A": 10},
         "calls": [
-            {"date": "2026-09-04", "loc": "A", "agentName": "Agent A", "campaign": "A:100", "inbound": True, "n": 10, "booked": 4, "abandoned": 1},
+            {"date": "2026-09-04", "loc": "A", "agentName": "Agent A", "campaign": "A:100", "inbound": True, "n": 10, "booked": 4, "abandoned": 1, "unbooked": 4, "excused": 1},
             {"date": "2026-09-05", "loc": "A", "agentName": None, "campaign": None, "inbound": True, "n": 3, "booked": 0, "abandoned": 3},
             {"date": "2026-09-06", "loc": "A", "agentName": "Agent A", "campaign": None, "inbound": False, "n": 5, "booked": 0, "abandoned": 0},
         ],
@@ -134,7 +134,8 @@ def test_install_accounting_marketing_office_memberships_exact():
 
     o = compute(query(), "office")
     assert o["kpis"] == {"inboundCalls": 13, "outboundCalls": 5, "booked": 4, "bookRatePct": 30.8, "abandoned": 4,
-                         "abandonRatePct": 30.8, "inboundReachedNoAgent": 3}
+                         "abandonRatePct": 30.8, "unbooked": 4, "excused": 1, "bookRateOfBookableCallsPct": 50.0,
+                         "inboundReachedNoAgent": 3}
     assert o["agents"] == [{"agent": "Agent A", "answered": 9, "booked": 4, "bookRatePct": 44.4}]
 
     mem = compute(query(), "memberships")
@@ -174,7 +175,8 @@ def test_demo_invariants(demo_data):
     assert abs(rev["completedRevenue"] - round(expected, 2)) < 0.01
     assert rev["billedJobs"] + rev["noChargeOrSalesVisits"] == rev["jobsCompleted"]
     svc = compute(q, "service")["kpis"]
-    assert abs(svc["avgTicket"] * svc["billedCalls"] - svc["completedRevenue"]) < 1
+    # avgTicket is rounded to cents, so the product can drift by half a cent per billed call
+    assert abs(svc["avgTicket"] * svc["billedCalls"] - svc["completedRevenue"]) <= 0.005 * svc["billedCalls"] + 0.01
     acc = compute(q, "accounting")
     assert abs(sum(b["amount"] for b in acc["arAging"]) - acc["kpis"]["totalAR"]) < 0.05
     sales = compute(q, "sales")["kpis"]
