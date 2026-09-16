@@ -70,6 +70,9 @@ def test_cli_offline_flow(capsys, isolated_home, demo_path):
     assert code == 0 and os.path.getsize(html) > 100000 and out["isDemo"] is True
     text = open(html, encoding="utf-8").read()
     assert "__LIVE_DATA_JSON__" not in text and '"isDemo":true' in text
+    assert '"jobType"' not in text  # agent-only fields stay out of the shared page
+    code, out2, _ = run_cli(capsys, "render", "--data", demo_path, "--out", html, "--full")
+    assert code == 0 and out2["bytes"] > out["bytes"] and '"jobType"' in open(html, encoding="utf-8").read()
 
     code, out, _ = run_cli(capsys, "schema")
     assert code == 0 and out["commands"]["command"] == "servicetitan"

@@ -19,6 +19,7 @@ from .config import Context
 from .dates import RANGE_KINDS, parse_iso
 from .errors import CliError, ConfigError, DataError, UsageError, ValidationError
 from .output import emit, emit_error, progress, redact
+from .paths import snapshot_path
 
 EXAMPLES = """
 examples:
@@ -189,6 +190,7 @@ def build_parser():
     x.add_argument("--brand-dir", default="brand", metavar="DIR", help="folder with logo-light.png / logo-dark.png")
     x.add_argument("--template", metavar="PATH", help="custom template instead of the bundled one")
     x.add_argument("--skip-checks", action="store_true", help="render even if integrity checks fail")
+    x.add_argument("--full", action="store_true", help="embed every snapshot field (default: only what the template reads)")
     x.add_argument("--max-age", type=float, default=6.0, metavar="HOURS")
     x = _sub(sub, "duplicates", "people who may hold two ServiceTitan user records")
 
@@ -394,7 +396,7 @@ def cmd_profile(ctx, args):
             raise ConfigError("No profiles yet", hint="Run `servicetitan profile add <name> --company \"...\"`.")
         out = store.effective(name)
         out["isDefault"] = name == store.default_name()
-        out["snapshotPath"] = ctx.data_path if ctx.requested_profile == name else __import__("servicetitan_cli.paths", fromlist=["snapshot_path"]).snapshot_path(name)
+        out["snapshotPath"] = snapshot_path(name)
         return redact(out)
     if action == "add":
         prof = store.add(args.name, company_name=args.company, subtitle=args.subtitle, timezone=args.timezone,
@@ -669,7 +671,8 @@ def cmd_fetch(ctx, args):
                 merged.update(snapshot.get(key) or {})
                 snapshot[key] = merged
             snapshot["tenants"] = [t for t in existing.get("tenants") or [] if t.get("code") not in codes] + snapshot["tenants"]
-            snapshot["rawCallCount"] = sum(len([c for c in snapshot["calls"]]) for _ in [0])
+            snapshot["rawCallCount"] = sum(int(p.get("calls") or 0) for p in snapshot["pulls"].values())
+            snapshot["estimateCount"] = sum(int(p.get("estimates") or 0) for p in snapshot["pulls"].values())
     os.makedirs(os.path.dirname(os.path.abspath(out_path)) or ".", exist_ok=True)
     with open(out_path, "w", encoding="utf-8") as f:
         json.dump(snapshot, f, indent=1)
@@ -722,7 +725,8 @@ def cmd_render(ctx, args):
         settings["locations"] = [{"code": t.get("code"), "label": t.get("label")} for t in snap.data.get("tenants") or []] or settings["locations"]
     codes = [l["code"] for l in settings["locations"]]
     report = render_dashboard(snap, settings, args.out, brand_dir=args.brand_dir, template_path=args.template,
-                              skip_checks=args.skip_checks, max_age_hours=args.max_age, as_of=ctx.as_of, expected_codes=codes)
+                              skip_checks=args.skip_checks, max_age_hours=args.max_age, as_of=ctx.as_of, expected_codes=codes,
+                              full=args.full)
     return report
 
 

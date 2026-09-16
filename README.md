@@ -199,7 +199,9 @@ python scripts/build_endpoint_catalogue.py   # refresh the endpoint catalogue fr
 
 `docs/servicetitan-api.md` collects what the ServiceTitan documentation says
 about auth, paging, rate limits and the data model, with sources.
-`BRANDING.md` covers logos, colours and type for the rendered dashboard.
+`docs/publishing-the-dashboard.md` covers hosting the rendered page as an
+installable app with a scheduled refresh. `BRANDING.md` covers logos, colours
+and type.
 
 ## Migrating from the dashboard template
 

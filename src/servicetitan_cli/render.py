@@ -10,6 +10,33 @@ from .snapshot import check_snapshot, problems
 TEMPLATE_NAME = "data/dashboard_template.html"
 PLACEHOLDERS = ("__LIVE_DATA_JSON__", "__CONFIG_JSON__", "__LOGO_LIGHT__", "__LOGO_DARK__")
 
+# The fields the bundled template actually reads. Snapshots carry more (job
+# numbers, customers, job types ...) for agents; embedding those would only
+# make the page heavier and leak more names into a file people share.
+TEMPLATE_FIELDS = {
+    "technicians": ("id", "name", "loc", "dept"),
+    "businessUnits": ("id", "loc", "name", "dept"),
+    "jobs": ("id", "date", "loc", "dept", "tech", "revenue", "future", "campaign", "membershipSold", "lowTicket", "options"),
+    "opportunities": ("id", "loc", "dept", "customer", "city", "jobNumber", "title", "presentedOn", "wonOn", "won",
+                      "options", "owner", "value", "topOption"),
+    "ar": ("id", "loc", "customer", "invoiceDate", "dueDate", "balance", "businessUnit"),
+    "purchaseOrders": ("id", "loc", "vendor", "date", "total", "status"),
+    "campaigns": ("id", "loc", "name", "category"),
+    "calls": ("date", "loc", "agentName", "campaign", "inbound", "n", "booked", "abandoned"),
+    "memberships": ("id", "loc", "status", "type", "from", "to", "soldBy"),
+}
+TEMPLATE_TOP_LEVEL = ("generatedAt", "isDemo", "people", "poTotals", "rawCallCount", "estimateCount")
+
+
+def template_payload(data, full=False):
+    """The slice of a snapshot the dashboard needs (or everything with ``full``)."""
+    if full:
+        return data
+    out = {k: data.get(k) for k in TEMPLATE_TOP_LEVEL if k in data}
+    for coll, fields in TEMPLATE_FIELDS.items():
+        out[coll] = [{f: r.get(f) for f in fields if f in r} for r in data.get(coll) or []]
+    return out
+
 
 def shrink(value):
     """Round money to cents and drop nulls, which the front end treats as absent."""
@@ -40,7 +67,7 @@ def load_template(path=None):
 
 
 def render_dashboard(snapshot, settings, out_path, brand_dir="brand", template_path=None, skip_checks=False,
-                     max_age_hours=6.0, as_of=None, expected_codes=None):
+                     max_age_hours=6.0, as_of=None, expected_codes=None, full=False):
     """Validate, then write ``out_path``. Returns a report dict."""
     data = snapshot.data
     codes = expected_codes if expected_codes is not None else [l["code"] for l in settings.get("locations", [])]
@@ -54,7 +81,7 @@ def render_dashboard(snapshot, settings, out_path, brand_dir="brand", template_p
     for token in PLACEHOLDERS:
         if token not in html:
             raise DataError("The template is missing the %s placeholder; has it been edited?" % token)
-    payload = json.dumps(shrink(data), separators=(",", ":")).replace("</", "<\\/")
+    payload = json.dumps(shrink(template_payload(data, full=full)), separators=(",", ":")).replace("</", "<\\/")
     config = json.dumps(shrink(settings), separators=(",", ":")).replace("</", "<\\/")
     light = inline_png(os.path.join(brand_dir, "logo-light.png")) if brand_dir else ""
     dark = inline_png(os.path.join(brand_dir, "logo-dark.png")) if brand_dir else ""
