@@ -28,6 +28,13 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=7", "build"]
+# Local semantic index (servicetitan index ..., --save). Python 3.10+; the default local embedding model
+# (fastembed, ONNX, no compiler) supports up to Python 3.12. On 3.13 use llama-index-embeddings-huggingface.
+index = [
+  "llama-index-core>=0.12; python_version >= '3.10'",
+  "llama-index-embeddings-fastembed>=0.3; python_version >= '3.10' and python_version < '3.13'",
+  "fastembed>=0.3; python_version >= '3.10' and python_version < '3.13'",
+]
 
 [project.scripts]
 servicetitan = "servicetitan_cli.cli:main"

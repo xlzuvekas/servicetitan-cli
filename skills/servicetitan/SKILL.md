@@ -14,6 +14,7 @@ Writes below).
 
 ```bash
 servicetitan status            # profile, tenants, snapshot age
+servicetitan brief             # the operating picture in one call: today, next 7 days, MTD, receivables, flags
 servicetitan profile list      # if several companies are configured; then pass --profile NAME everywhere
 ```
 
@@ -62,6 +63,12 @@ servicetitan api endpoints --search "<words>"     # when the module is unknown
 
 Responses say `"source": "live"`; snapshot answers say `"source": "snapshot"`.
 
+Keep anything worth finding again with `--save --save-label "why"` (any
+command). When `servicetitan index status` reports an index, fuzzy questions go
+to `servicetitan index query "<words>" [--kind invoices,result,api]`: it returns
+matching records, saved results, API operations and definitions with a `next`
+command for each; run that command before quoting a figure.
+
 ## Writes
 
 Write operations (POST, PUT, PATCH, DELETE) are marked gated in the tree. They
@@ -98,7 +105,7 @@ number. In particular:
 - **Committed on open POs** is not accounts payable.
 
 State the range and the snapshot time (`snapshot.generatedAt`) with any
-figure. Demo data (`snapshot.isDemo: true`) is synthetic; never present it as real.
+figure.
 
 ## Dashboard
 

@@ -21,6 +21,11 @@ Python 3.9+, `requests` + `keyring` only. Source in `src/servicetitan_cli/`, tes
   connection on a write is reported, not repeated.
 - **Credentials never go to a foreign host.** `resolve_url` refuses URLs off
   the environment's API host. Keep it that way.
+- **The index stays local.** `indexing.py` computes embeddings on the machine
+  (fastembed, huggingface, ollama or hash); never default to a hosted
+  embedding or language-model service, and `index query` never calls an LLM.
+  Index and results directories are owner-only. LlamaIndex stays an optional
+  extra; core commands must work without it.
 - **stdout is one JSON document.** Progress, warnings and errors go to stderr.
   Use `output.progress`, never `print`.
 - **Errors are `CliError` subclasses** with a code, exit status and a hint that
@@ -45,6 +50,8 @@ Python 3.9+, `requests` + `keyring` only. Source in `src/servicetitan_cli/`, tes
 | `apitree.py` | Builds an argparse parser per operation from the catalogue and executes it; writes pass through `authorize_write` (flag, allowlist, scope) and `execute_write` (body, dry run, confirmation, audit). |
 | `writes.py` | Write policy: allowlist patterns, request-body assembly and validation, terminal confirmation, audit log. |
 | `catalogue.py` | Builds a catalogue from OpenAPI documents (naming rules, hashes, versions, deprecation), refreshes from the live portal into the config dir, diffs two catalogues. |
+| `indexing.py` | Local LlamaIndex: documents from snapshot records, saved results (`--save`), the catalogue, definitions and docs; build/update, status, query, results store. Lazy imports; `hash` embeddings for tests. |
+| `brief.py` | `servicetitan brief`: a selection from the metrics areas for one-call orientation; no new math. |
 | `render.py` + `data/dashboard_template.html` | The single-file dashboard. |
 | `schema.py` | `servicetitan schema`; derived from the parser, so new commands appear automatically. |
 
@@ -52,7 +59,8 @@ Python 3.9+, `requests` + `keyring` only. Source in `src/servicetitan_cli/`, tes
 
 - Add a test for every command or metric change; `tests/test_metrics.py` has a
   hand-built snapshot with known answers, extend it rather than asserting on
-  demo data.
+  the synthetic fixture. `tests/synthetic.py` generates that fixture; it is
+  test support, not a product feature (there is no demo command).
 - Keep help text and `DEFINITIONS` in plain language: agents read them.
 - Do not add dependencies without a reason that survives a Windows laptop with
   no compiler.

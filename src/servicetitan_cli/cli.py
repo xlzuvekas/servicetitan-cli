@@ -50,14 +50,17 @@ def _common(parser):
                    help="legacy dashboard config.json (implies --env-file .env beside it)")
     g.add_argument("--env-file", default=argparse.SUPPRESS, metavar="PATH", help="legacy .env with SERVICETITAN_* keys")
     g.add_argument("--data", default=argparse.SUPPRESS, metavar="PATH", help="snapshot file to read or write")
-    g.add_argument("-f", "--format", default=argparse.SUPPRESS, choices=("json", "text"),
-                   help="output format (default json; SERVICETITAN_FORMAT)")
+    g.add_argument("-f", "--format", default=argparse.SUPPRESS, choices=("json", "text", "csv"),
+                   help="output format (default json; SERVICETITAN_FORMAT). csv writes the result's main table")
     g.add_argument("--compact", default=argparse.SUPPRESS, action="store_true", help="single-line JSON")
     g.add_argument("--as-of", default=argparse.SUPPRESS, metavar="DATETIME",
                    help="treat this instant as 'now' (ISO date or datetime) for reproducible answers")
     g.add_argument("--secrets", default=argparse.SUPPRESS, choices=("auto", "keyring", "file"),
                    help="secret backend (default auto: OS keyring, else owner-only file)")
     g.add_argument("-q", "--quiet", default=argparse.SUPPRESS, action="store_true", help="no progress on stderr")
+    g.add_argument("--save", default=argparse.SUPPRESS, action="store_true",
+                   help="also keep this result under <config dir>/results/<profile>/ and add it to the local index when one exists")
+    g.add_argument("--save-label", default=argparse.SUPPRESS, metavar="TEXT", help="a label stored with --save")
     return parser
 
 
@@ -187,9 +190,7 @@ def build_parser():
     x.add_argument("--page-size", type=int, default=200, help="records per page, max 500 (default %(default)s)")
     x.add_argument("--workers", type=int, default=4, help="tenants pulled concurrently (rate limits are per tenant; default %(default)s)")
     x.add_argument("--out", metavar="PATH", help="write here instead of the profile's snapshot path")
-    x = _sub(sub, "demo", "write a synthetic snapshot to try every command offline")
-    x.add_argument("--out", metavar="PATH", help="default: the profile's snapshot path (or ./demo_data.json without a profile)")
-    x.add_argument("--seed", type=int, default=20260101)
+    x.add_argument("--index", action="store_true", help="then update the local semantic index (needs the index extra)")
     x = _sub(sub, "check", "run the snapshot integrity checks (exit 6 on failure)")
     x.add_argument("--max-age", type=float, default=6.0, metavar="HOURS")
     x = _sub(sub, "render", "build the self-contained dashboard.html (validates first)")
@@ -278,6 +279,41 @@ def build_parser():
                          "carries its :w scope; --dry-run previews and audit.jsonl records every attempt.")
     x.add_argument("rest", nargs=argparse.REMAINDER, metavar="<module> <resource> <operation> ...")
 
+    # ---- briefing
+    x = _sub(sub, "brief", "one-call operations briefing from the snapshot: today, next 7 days, month to date, "
+                           "receivables, memberships, pipeline, flags")
+    x.add_argument("--max-age", type=float, default=6.0, metavar="HOURS",
+                   help="snapshot older than this is reported stale (default %(default)s)")
+    x.add_argument("--require-fresh", action="store_true", help="exit 7 instead of answering from a stale snapshot")
+
+    # ---- local semantic index
+    p = _sub(sub, "index", "local semantic index over everything stored here (LlamaIndex, optional extra): "
+                           "snapshot records, saved results, the API catalogue, metric definitions, docs",
+             description="Everything stays on this machine: embeddings are computed locally and the index lives in the "
+                         "config directory. `query` is retrieval only; the caller reasons over the hits. "
+                         "Install with: pip install \"servicetitan-cli[index]\"")
+    ips = p.add_subparsers(dest="index_cmd", metavar="<action>")
+    x = _sub(ips, "build", "build or update the profile's index (incremental: unchanged documents are not re-embedded)")
+    x.add_argument("--sources", default=",".join(("snapshot", "results", "catalogue", "definitions", "docs")),
+                   help="comma-separated subset of snapshot, results, catalogue, definitions, docs (default: all)")
+    x.add_argument("--docs", action="append", metavar="PATH", help="markdown file or directory to include (repeatable)")
+    x.add_argument("--embed", metavar="BACKEND[:MODEL]",
+                   help="fastembed[:MODEL] (default, local ONNX, downloads the model once), huggingface:MODEL, "
+                        "ollama:MODEL, or hash (no download, crude); also SERVICETITAN_EMBED")
+    x.add_argument("--rebuild", action="store_true", help="start from scratch (required to change the embedding model)")
+    x = _sub(ips, "status", "what is indexed, from which snapshot, with which model; whether it is behind")
+    x = _sub(ips, "query", "the closest documents to a question, as JSON hits with scores (no language model runs)")
+    x.add_argument("text")
+    x.add_argument("--top", type=int, default=8, help="number of hits (default %(default)s)")
+    x.add_argument("--kind", metavar="A,B", help="restrict to kinds: jobs, opportunities, invoices, purchase-orders, calls, "
+                                              "memberships, technicians, campaigns, business-units, people, result, api, "
+                                              "definition, doc")
+    x.add_argument("--min-score", type=float, help="drop hits below this similarity")
+    x.add_argument("--all-profiles", action="store_true", help="search every profile's index on this machine")
+    x = _sub(ips, "results", "saved command results (--save): list them, or --show one")
+    x.add_argument("--limit", type=int, default=50)
+    x.add_argument("--show", metavar="FILE", help="print one saved result (file name or prefix)")
+
     # ---- misc
     x = _sub(sub, "palette", "validate chart colours for accessibility (band, chroma, contrast, colour-blind separation)")
     x.add_argument("colours", help="comma-separated hex colours in series order")
@@ -341,7 +377,7 @@ def _query(ctx, args, allow_all=False):
     from .metrics import Query
     from .snapshot import load_snapshot
     settings = _settings(ctx)
-    snap = load_snapshot(ctx.data_path, demo_fallback=True)
+    snap = load_snapshot(ctx.data_path)
     kind = _opt(args, "range", "mtd")
     start = end = None
     if _opt(args, "start"):
@@ -701,35 +737,37 @@ def cmd_fetch(ctx, args):
     with open(out_path, "w", encoding="utf-8") as f:
         json.dump(snapshot, f, indent=1)
     progress("Wrote %s" % out_path, ctx.quiet)
-    return {"written": os.path.abspath(out_path), "generatedAt": snapshot["generatedAt"],
-            "tenants": [t["code"] for t in snapshot["tenants"]], "partial": partial,
-            "counts": {k: len(snapshot.get(k) or []) for k in ("jobs", "opportunities", "ar", "purchaseOrders", "calls",
-                                                                "memberships", "technicians", "businessUnits", "campaigns")},
-            "pulls": snapshot.get("pulls"), "next": "servicetitan metrics all  |  servicetitan render"}
+    result = {"written": os.path.abspath(out_path), "generatedAt": snapshot["generatedAt"],
+              "tenants": [t["code"] for t in snapshot["tenants"]], "partial": partial,
+              "counts": {k: len(snapshot.get(k) or []) for k in ("jobs", "opportunities", "ar", "purchaseOrders", "calls",
+                                                                  "memberships", "technicians", "businessUnits", "campaigns")},
+              "pulls": snapshot.get("pulls"), "next": "servicetitan metrics all  |  servicetitan render"}
+    if getattr(args, "index", False):
+        result["index"] = _index_after_fetch(ctx, out_path)
+    return result
 
 
-def cmd_demo(ctx, args):
-    from .demo import build_demo
-    cfg = ctx.config_or_default()
-    out_path = args.out or (ctx.data_path if ctx.source != "default" else "demo_data.json")
-    op_start, _ = ctx.window_starts() if ctx.source != "default" else ("%d-01-01T00:00:00Z" % ctx.as_of.year, None)
-    payload = build_demo(cfg, op_start, seed=args.seed, profile=cfg.get("profile") or "demo")
-    os.makedirs(os.path.dirname(os.path.abspath(out_path)) or ".", exist_ok=True)
-    with open(out_path, "w", encoding="utf-8") as f:
-        json.dump(payload, f, indent=1)
-    done = [j for j in payload["jobs"] if not j["future"]]
-    return {"written": os.path.abspath(out_path), "isDemo": True, "seed": args.seed,
-            "tenants": [t["code"] for t in payload["tenants"]], "completedJobs": len(done),
-            "completedRevenue": round(sum(j["revenue"] for j in done), 2), "opportunities": len(payload["opportunities"]),
-            "next": "servicetitan metrics all --data %s" % out_path if ctx.source == "default" else "servicetitan metrics all"}
+def _index_after_fetch(ctx, snapshot_path):
+    from . import indexing
+    ok, why = indexing.available()
+    if not ok:
+        progress("warning: not indexed; install the index extra (pip install \"servicetitan-cli[index]\")", ctx.quiet)
+        return {"skipped": "LlamaIndex extra not installed"}
+    first = not indexing.read_manifest(indexing.index_dir(indexing.index_name(ctx)))
+    sources = list(indexing.SOURCES) if first else ["snapshot"]
+    try:
+        return indexing.build(ctx, sources=sources, snapshot_path=snapshot_path, quiet=ctx.quiet)
+    except CliError as e:
+        progress("warning: index not updated: %s" % e.message, ctx.quiet)
+        return {"skipped": e.message}
 
 
 def cmd_check(ctx, args):
     from .snapshot import check_snapshot, load_snapshot, problems
     _settings(ctx)
-    snap = load_snapshot(ctx.data_path, demo_fallback=True)
+    snap = load_snapshot(ctx.data_path)
     results = check_snapshot(snap.data, [t["code"] for t in ctx.tenants] if ctx.source != "default" else snap.tenant_codes(),
-                             demo=snap.is_demo, max_age_hours=args.max_age, as_of=ctx.as_of)
+                             synthetic=snap.is_demo, max_age_hours=args.max_age, as_of=ctx.as_of)
     bad = problems(results)
     out = {"ok": not bad, "snapshot": snap.describe(as_of=ctx.as_of, max_age_hours=args.max_age), "checks": results}
     if bad:
@@ -741,12 +779,12 @@ def cmd_render(ctx, args):
     from .render import render_dashboard
     from .snapshot import load_snapshot
     cfg = _settings(ctx) if ctx.explicit_data_path else ctx.config_or_default()
-    snap = load_snapshot(ctx.data_path if (ctx.source != "default" or ctx.explicit_data_path) else "demo_data.json", demo_fallback=True)
+    snap = load_snapshot(ctx.data_path)
     settings = ctx.dashboard_settings() if ctx.source != "default" else {
         "company": cfg["company"], "locations": [{"code": t["code"], "label": t.get("label")} for t in cfg["tenants"]],
         "targets": cfg["targets"], "rules": cfg["rules"]}
-    if snap.is_demo:
-        settings["locations"] = [{"code": t.get("code"), "label": t.get("label")} for t in snap.data.get("tenants") or []] or settings["locations"]
+    if not settings["locations"]:          # a snapshot file without a profile: the snapshot names its tenants
+        settings["locations"] = [{"code": t.get("code"), "label": t.get("label")} for t in snap.data.get("tenants") or []]
     codes = [l["code"] for l in settings["locations"]]
     report = render_dashboard(snap, settings, args.out, brand_dir=args.brand_dir, template_path=args.template,
                               skip_checks=args.skip_checks, max_age_hours=args.max_age, as_of=ctx.as_of, expected_codes=codes,
@@ -757,7 +795,7 @@ def cmd_render(ctx, args):
 def cmd_duplicates(ctx, args):
     from .snapshot import find_duplicates, load_snapshot
     _settings(ctx)
-    snap = load_snapshot(ctx.data_path, demo_fallback=True)
+    snap = load_snapshot(ctx.data_path)
     groups = find_duplicates(snap.data)
     return {"snapshot": snap.describe(as_of=ctx.as_of), "possibleDuplicates": len(groups), "groups": groups,
             "note": "Confirm each is really one person before adding to personAliases; merging two different people "
@@ -957,11 +995,37 @@ def cmd_api(ctx, args):
     parser = apitree.build_parser(op, add_common=_common)
     ns = parser.parse_args(rest[3:])
     for k, v in vars(ns).items():   # global options given after the operation (e.g. --tenant, --format)
-        if k in ("profile", "tenant", "format", "compact", "quiet", "as_of", "data", "config", "env_file", "secrets") and v not in (None, False):
+        if k in ("profile", "tenant", "format", "compact", "quiet", "as_of", "data", "config", "env_file", "secrets",
+                 "save", "save_label") and v not in (None, False):
             setattr(args, k, v)
     if ns.describe:
         return ep.describe(op)
     return apitree.execute(op, ns, ctx, client_factory=None, tenant_code=_opt(args, "tenant"))
+
+
+def cmd_brief(ctx, args):
+    from .brief import build_brief
+    snap, q = _query(ctx, args)
+    settings = _settings(ctx)
+    return build_brief(snap, ctx.as_of, ctx.tz, tenant=q.tenant, targets=settings.get("targets"), rules=settings.get("rules"),
+                       max_age_hours=_opt(args, "max_age", 6.0))
+
+
+def cmd_index(ctx, args):
+    from . import indexing
+    action = args.index_cmd
+    if action == "build":
+        sources = [s.strip().lower() for s in (args.sources or "").split(",") if s.strip()] or list(indexing.SOURCES)
+        return indexing.build(ctx, sources=sources, docs_paths=args.docs, embed=args.embed, rebuild=args.rebuild, quiet=ctx.quiet)
+    if action == "status":
+        return indexing.status(ctx)
+    if action == "query":
+        kinds = [k for k in (args.kind or "").split(",") if k.strip()]
+        return indexing.query(ctx, args.text, top=args.top, kinds=kinds, tenant=_opt(args, "tenant"),
+                              all_profiles=args.all_profiles, min_score=args.min_score)
+    if action == "results":
+        return indexing.list_results(ctx, limit=args.limit, show=args.show)
+    raise UsageError("index needs an action", hint="build, status, query or results")
 
 
 def cmd_palette(ctx, args):
@@ -1015,9 +1079,9 @@ def cmd_init(ctx, args):
 
 
 HANDLERS = {"profile": cmd_profile, "tenant": cmd_tenant, "auth": cmd_auth, "status": cmd_status, "fetch": cmd_fetch,
-            "demo": cmd_demo, "check": cmd_check, "render": cmd_render, "duplicates": cmd_duplicates,
+            "check": cmd_check, "render": cmd_render, "duplicates": cmd_duplicates,
             "metrics": cmd_metrics, "list": cmd_list, "api": cmd_api, "palette": cmd_palette, "schema": cmd_schema,
-            "init": cmd_init}
+            "init": cmd_init, "brief": cmd_brief, "index": cmd_index}
 
 
 # ---------------------------------------------------------------- main
@@ -1040,6 +1104,18 @@ def main(argv=None):
             progress("warning: %s" % w, quiet)
         if result is None:
             return 0
+        if _opt(args, "save") and args.command not in ("index", "schema"):
+            from . import indexing
+            words = [args.command] + [str(getattr(args, a)) for a in ("kind", "area", "profile_cmd", "tenant_cmd", "auth_cmd")
+                                      if getattr(args, a, None)]
+            words += [r for r in (getattr(args, "rest", None) or [])[:3] if not str(r).startswith("-")]
+            saved = indexing.save_result(ctx, list(argv if argv is not None else sys.argv[1:]), result,
+                                         label=_opt(args, "save_label"), quiet=quiet, words=words)
+            if isinstance(result, dict):
+                result["saved"] = saved
+            else:
+                result = {"result": result, "saved": saved}
+            progress("saved %s%s" % (saved["path"], " (indexed)" if saved.get("indexed") else ""), quiet)
         fmt = _opt(args, "format") or os.environ.get("SERVICETITAN_FORMAT") or "json"
         compact = bool(_opt(args, "compact"))
         if args.command in ("tenant", "profile") and ctx.secrets_selected() and ctx.secrets.fallback_reason:

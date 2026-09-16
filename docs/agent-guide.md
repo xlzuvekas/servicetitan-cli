@@ -17,6 +17,7 @@ servicetitan <command> --help
 
 ```bash
 servicetitan status                       # which profile/tenants, snapshot age
+servicetitan brief                        # today, next 7 days, month to date, receivables, memberships, flags
 servicetitan fetch --max-age 6            # refresh if older than 6 hours (skips otherwise)
 servicetitan metrics <area> [--range mtd|qtd|ytd|last30|custom --start --end] [--tenant CODE] [--explain]
 servicetitan list <kind> [filters] --fields a,b,c --limit 20
@@ -41,6 +42,7 @@ Add `--require-fresh` when a stale answer would be worse than no answer.
 | One rep's open quotes | `list opportunities --open --rep "Casey" --sort=-bestOption` |
 | Something the snapshot does not hold | `api endpoints --search "<words>"` then `api get <path> --param k=v [--all]` |
 | Is the data trustworthy? | `check` (exit 6 lists failed integrity checks) |
+| A fuzzy question: a customer by a half-remembered name, "the operation for X", "what did we find yesterday" | `index query "<words>" [--kind invoices,result,api]` (when `index status` says an index exists) |
 
 Before quoting a number to a person, run the metric with `--explain` once and
 carry the definition: for example "avg ticket" is measured on billed calls only,
@@ -118,6 +120,32 @@ servicetitan api audit --limit 5                                         # what 
   before repeating it.
 - Do not ask for the policy to be widened beyond the operation at hand, and
   never suggest `*`.
+
+## Remembering and searching
+
+`--save` on any command keeps its result under the config directory with the
+command line that produced it; add `--save-label "why"` so it can be found
+again. Save live API answers you may need later (`api jpm jobs get 12345
+--save`), not routine snapshot queries you can rerun.
+
+When the index extra is installed (`servicetitan index status` says so):
+
+```bash
+servicetitan index status                              # exists? behind the snapshot? results saved since?
+servicetitan index build                               # incremental; a person may prefer `fetch --index`
+servicetitan index query "noisy furnace" --top 5       # hits: score, kind, id, tenant, text, next command
+servicetitan index query "technician ratings" --kind api
+servicetitan index query "overdue" --kind result       # what was saved before
+servicetitan index results --show FILE                 # the full saved result
+```
+
+Hits are retrieval, not answers: run the `next` command on a hit before quoting
+a figure, and prefer `list`/`metrics` for anything numeric. A warning on stderr
+says when the index is behind the snapshot. Everything runs on this machine;
+nothing is sent to an embedding service.
+
+`--format csv` on any command writes its main table (records, data, hits) as
+CSV for a spreadsheet.
 
 ## Exit codes
 

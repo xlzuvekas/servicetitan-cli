@@ -5,7 +5,7 @@ import os
 import pytest
 
 from servicetitan_cli.dates import UTC
-from servicetitan_cli.demo import build_demo
+from synthetic import build_demo
 from servicetitan_cli.store import new_profile
 
 FIXED_NOW = dt.datetime(2026, 9, 15, 17, 30, tzinfo=UTC)

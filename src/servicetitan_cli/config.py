@@ -125,7 +125,7 @@ def load_legacy_config(path):
 class Context(object):
     """Everything a command needs: settings, tenants, credentials, clock, paths.
 
-    Resolution is lazy so commands that need no profile (``demo``, ``schema``,
+    Resolution is lazy so commands that need no profile (``schema``,
     ``palette``, ``profile add``) never fail for lack of one.
     """
 
@@ -231,15 +231,13 @@ class Context(object):
         return self.config.get("environment") or "production"
 
     def config_or_default(self):
-        """Settings for commands that can run without a profile (demo, render of demo data)."""
+        """Settings for commands that query a snapshot file (--data) with no profile configured."""
         try:
             return self.config
         except ConfigError:
-            cfg = new_profile("Acme Home Services", timezone="UTC")
-            cfg["tenants"] = [{"code": "SPR", "label": "Springfield", "tenantId": None, "clientId": None},
-                              {"code": "LOC2", "label": "Location 2", "tenantId": None, "clientId": None}]
-            cfg["targets"] = {"avgTicket": 280, "membershipAttachPct": 12, "lowTicketPct": 10, "optionsPerCall": 2.5}
-            cfg["profile"] = "demo"
+            cfg = new_profile("Snapshot", timezone="UTC")
+            cfg["tenants"] = []
+            cfg["profile"] = "default"
             self._config = cfg
             self._source = "default"
             self.tz = UTC

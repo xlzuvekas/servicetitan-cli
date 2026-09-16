@@ -26,14 +26,15 @@ jobs:
         run: python -m pip install -e ".[dev]"
       - name: Unit tests
         run: python -m pytest
-      - name: Smoke (demo snapshot end to end)
-        shell: bash
-        run: |
-          export SERVICETITAN_HOME="$RUNNER_TEMP/st-home" SERVICETITAN_SECRETS=file
-          servicetitan demo --out demo.json --compact
-          servicetitan check --data demo.json --compact
-          servicetitan metrics all --data demo.json --compact > /dev/null
-          servicetitan list invoices --data demo.json --sort=-balance --limit 3 --compact > /dev/null
-          servicetitan render --data demo.json --out dashboard.html --compact
-          servicetitan api endpoints --search jobs --compact > /dev/null
-          servicetitan schema --compact > /dev/null
+
+  index-extra:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install with the index extra
+        run: python -m pip install -e ".[dev,index]"
+      - name: Index tests (hash embeddings, no model download)
+        run: python -m pytest tests/test_index.py -q
