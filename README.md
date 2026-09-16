@@ -157,6 +157,29 @@ Ask the CLI itself: `servicetitan schema`. For Claude Code or Cowork, install
 `skills/servicetitan/SKILL.md` as a skill and the agent will reach for the CLI
 on its own when ServiceTitan comes up.
 
+## Use as a library
+
+Everything the CLI does is importable, so a Python agent or a scheduled job can
+skip the subprocess:
+
+```python
+from servicetitan_cli.config import Context
+from servicetitan_cli.api import ServiceTitanClient
+from servicetitan_cli.snapshot import load_snapshot
+from servicetitan_cli.metrics import Query, compute
+
+ctx = Context(profile="acme")                      # same resolution rules as the CLI
+client = ServiceTitanClient(ctx.credentials_for(ctx.tenants[0]))
+jobs = client.get_all("jpm/v2/jobs", {"jobStatus": "Completed", "completedOnOrAfter": "2026-09-01T00:00:00Z"})
+
+snap = load_snapshot(ctx.data_path)
+q = Query(snap, ctx.as_of, ctx.tz, range_kind="mtd", targets=ctx.config["targets"], rules=ctx.config["rules"])
+print(compute(q, "service")["kpis"]["avgTicket"])
+```
+
+`ServiceTitanClient` has no write methods; `get`, `get_all`, `get_pages` and
+`export` are the whole surface.
+
 ## Reading the numbers
 
 Several figures are derived rather than read from a field, because the obvious
