@@ -25,6 +25,10 @@ per-profile allowlist and the matching API scope.
   credential: whatever write scopes the tenant admin granted the app is
   exactly what the CLI can write. `--dry-run` previews and an audit log
   records.
+- **It remembers what it finds.** `--save` on any command keeps the result on
+  disk, and an optional local LlamaIndex makes every stored record, saved
+  result, API operation and definition searchable by meaning, with embeddings
+  computed on the machine so nothing leaves it.
 - **The dashboard is still here.** `servicetitan render` writes the same
   single-file operations dashboard the template produced.
 
@@ -40,18 +44,8 @@ pip install git+https://github.com/xlzuvekas/servicetitan-cli
 servicetitan --version
 ```
 
-Python 3.9 or newer. Windows, macOS and Linux. `pipx install` works too.
-
-## Try it in one minute, no credentials
-
-```bash
-servicetitan demo --out demo.json            # synthetic snapshot, two tenants
-servicetitan metrics service --data demo.json --range mtd
-servicetitan list invoices --data demo.json --min-days-past-due 60 --sort=-balance
-servicetitan render --data demo.json --out dashboard.html   # open it in a browser
-```
-
-Demo output is flagged `isDemo: true` everywhere and the dashboard shows a banner.
+Python 3.9 or newer. Windows, macOS and Linux. `pipx install` works too. Add
+`[index]` for the local semantic index (Python 3.10 or newer).
 
 ## Connect a company
 
@@ -103,12 +97,14 @@ Every response says where it came from:
 ```bash
 servicetitan fetch --max-age 6        # pull a snapshot unless one is younger than 6h
 servicetitan status                   # profile, tenants, snapshot age and counts
+servicetitan brief                    # today, next 7 days, month to date, receivables, memberships, flags
 servicetitan metrics all --explain    # every area, with what each number means
 servicetitan metrics sales --range qtd --tenant TUC
 servicetitan list jobs --range next7 --booked --fields jobNumber,date,customer,revenue
 servicetitan list memberships --renews-within 30
 servicetitan api jpm appointments list --starts-on-or-after 2026-09-16T00:00:00Z --all
 servicetitan render --out dashboard.html
+servicetitan list invoices --min-days-past-due 60 --save   # keep this result; searchable once indexed
 ```
 
 ### The API tree
@@ -181,6 +177,43 @@ operation, the request and the result. A write is never retried automatically
 after a server or network error, because the change may already have been
 applied; the error says so and the matching read operation tells you.
 
+### Remembering and searching what you have (optional)
+
+`--save` on any command keeps its result under the config directory, and
+`servicetitan index` builds a local [LlamaIndex](https://www.llamaindex.ai/)
+over everything stored there: every snapshot record, every saved result, all
+600 API operations, the metric definitions and the docs. `index query` then
+finds things by meaning rather than by exact field, which is what an agent
+needs for "the customer with the noisy furnace", "which operation gives me
+technician ratings" or "what did we find about overdue invoices yesterday".
+
+```bash
+pip install "servicetitan-cli[index]"                       # Python 3.10 to 3.12; see below for 3.13
+servicetitan index build                                    # first run downloads a 128 MB embedding model once
+servicetitan index query "overdue invoices for the Smith account" --kind invoices --top 5
+servicetitan index query "technician ratings" --kind api    # semantic search over the API catalogue
+servicetitan api jpm jobs get 12345 --save --save-label "noisy furnace"    # keep a live answer
+servicetitan index query "noisy furnace" --kind result      # and find it again later
+servicetitan index results                                  # everything saved, newest last
+servicetitan index status                                   # what is indexed, from which snapshot, is it behind
+servicetitan fetch --index                                  # pull a snapshot and update the index in one go
+```
+
+`query` is retrieval only: it returns hits with a similarity score, the record's
+kind, tenant and id, the text that matched, and a `next` command that fetches
+the exact record. The calling agent does the reasoning, and confirms figures
+with `list` or `metrics` before quoting them. Building is incremental, so a
+daily `fetch --index` only embeds what changed.
+
+Everything stays on the machine. Embeddings are computed locally with
+[fastembed](https://github.com/qdrant/fastembed) (ONNX, no compiler, model
+cached under the config directory) and the index is owner-only JSON there.
+`--embed huggingface:MODEL` (needed on Python 3.13) and `--embed ollama:MODEL`
+are local too; `--embed hash` needs no download at all and is crude. A hosted
+embedding service is never used unless a person configures one. Without the
+extra installed, `--save` still keeps results on disk and `index results` still
+lists them; only the semantic search is missing.
+
 Snapshots live in the CLI's config directory (`servicetitan status` shows the
 path). Every query answer carries `snapshot.generatedAt`, `ageHours` and
 `stale`, so an agent can decide to fetch first; `--require-fresh` makes a stale
@@ -194,22 +227,25 @@ snapshot an error instead of a warning.
 | `tenant list/add/update/set-secret/remove` | ServiceTitan accounts inside a profile, with secret storage. |
 | `auth check` | Authenticate every tenant; preview business-unit classification; list what the credential can write. |
 | `status` | Profile summary plus snapshot freshness and record counts. Cheap; run first. |
+| `brief` | One-call operations briefing: today, next 7 days, month to date, receivables, memberships, pipeline, flags. |
 | `fetch` | Pull a snapshot (read-only). `--max-age`, `--tenant` for one tenant, `--max-pages`, `--page-size`. |
-| `demo` | Synthetic snapshot for trying things offline. |
 | `check` | Snapshot integrity checks; exit 6 on failure. Wire it into unattended refreshes. |
 | `metrics <area>` | `revenue`, `service`, `sales`, `install`, `accounting`, `marketing`, `office`, `memberships`, `all`. |
 | `list <kind>` | `jobs`, `opportunities`, `invoices`, `purchase-orders`, `calls`, `memberships`, `technicians`, `campaigns`, `business-units`, `people`, with filters, `--sort`, `--fields`, `--limit`, `--count`. |
 | `api <module> <resource> <operation>` | The whole API as a tree; `--help`/`--describe` at every level. Reads run live; writes need `--write`, an allowlist match and the `:w` scope, with `--dry-run` to preview. |
 | `api get <path>` / `api endpoints` / `api modules` / `api audit` | Raw path access, catalogue search and the write audit log. |
 | `render` | Build `dashboard.html` (validates first; never overwrites a good dashboard with a broken pull). |
+| `index build/status/query/results` | Local semantic index over stored records, saved results, the API catalogue, definitions and docs (optional extra). |
 | `duplicates` | People who may hold two ServiceTitan user records. |
 | `palette` | Accessibility check for chart colours. |
 | `schema` | Machine-readable description of all of the above. |
 | `init` | State-aware setup checklist. |
 
 Global options work before or after the command: `--profile`, `--tenant`,
-`--data`, `--format json|text`, `--compact`, `--as-of`, `--config`/`--env-file`
-(legacy layout), `--secrets auto|keyring|file`, `--quiet`.
+`--data`, `--format json|text|csv`, `--compact`, `--as-of`, `--config`/`--env-file`
+(legacy layout), `--secrets auto|keyring|file`, `--quiet`, `--save` (keep the
+result) and `--save-label TEXT`. `--format csv` writes the result's main table,
+ready for a spreadsheet.
 
 Ranges: `mtd` (default for metrics), `qtd`, `ytd`, `wtd`, `today`, `yesterday`,
 `last7/30/90`, `next7/14/30/45/90`, `custom --start --end`. Ranges end at
@@ -236,12 +272,13 @@ Errors go to stderr as `{"error": {"code", "exit", "message", "hint", "details"}
 [docs/agent-guide.md](docs/agent-guide.md) is the short version an agent can be
 pointed at. The essentials:
 
-1. `servicetitan status` to learn the profile, tenants and snapshot age.
+1. `servicetitan status` to learn the profile, tenants and snapshot age; `servicetitan brief` for the operating picture in one call.
 2. `servicetitan fetch --max-age 6` when the snapshot is stale (minutes for a large tenant).
 3. `servicetitan metrics <area>` for questions with a known answer shape; add `--explain` before quoting a number to a person.
 4. `servicetitan list <kind>` for "which ones" questions; trim payloads with `--fields` and `--limit`.
 5. `servicetitan api <module>` to discover, `--describe` to see a contract, then run the operation for anything the snapshot does not hold.
 6. Writes: `--describe`, then `--dry-run`, then `--write`. If the policy refuses (exit 3, `WRITES_DISABLED`) or the credential lacks the scope (exit 4, `SCOPE`), the hint says what a person must change.
+7. `--save` anything worth finding again; `servicetitan index query "..."` searches records, saved results, operations and definitions by meaning when the index extra is installed.
 
 Ask the CLI itself: `servicetitan schema`. For Claude Code or Cowork, install
 `skills/servicetitan/SKILL.md` as a skill and the agent will reach for the CLI
@@ -300,6 +337,8 @@ definitions; the full reasoning is in the docstring of `src/servicetitan_cli/fet
 <config dir>/tokens.json        15-minute access tokens (mode 0600)
 <config dir>/audit.jsonl        every write attempt: dry runs, successes, failures (mode 0600)
 <config dir>/snapshots/*.json   one snapshot per profile
+<config dir>/results/<profile>/ command results kept with --save (mode 0600)
+<config dir>/index/<profile>/   the local semantic index (mode 0700); index/models holds the embedding model
 ```
 
 The config dir is `%APPDATA%\servicetitan-cli` on Windows,
@@ -330,8 +369,8 @@ and type.
 |---|---|
 | `python test_connection.py` | `servicetitan auth check` |
 | `python fetch_dashboard_data.py` | `servicetitan fetch` |
-| `python render_dashboard.py [--demo]` | `servicetitan render [--data demo.json]` |
-| `python generate_demo_data.py` | `servicetitan demo` |
+| `python render_dashboard.py` | `servicetitan render` |
+| `python generate_demo_data.py` | dropped; synthetic data lives in the test suite (`tests/synthetic.py`) |
 | `python check_duplicates.py` | `servicetitan duplicates` |
 | `python validate_palette.py ...` | `servicetitan palette ...` |
 | `config.json` + `.env` | `servicetitan profile import`, or keep using them in place |

@@ -71,7 +71,7 @@ def render_dashboard(snapshot, settings, out_path, brand_dir="brand", template_p
     """Validate, then write ``out_path``. Returns a report dict."""
     data = snapshot.data
     codes = expected_codes if expected_codes is not None else [l["code"] for l in settings.get("locations", [])]
-    results = check_snapshot(data, codes, demo=snapshot.is_demo, max_age_hours=max_age_hours, as_of=as_of)
+    results = check_snapshot(data, codes, synthetic=snapshot.is_demo, max_age_hours=max_age_hours, as_of=as_of)
     bad = problems(results)
     if bad and not skip_checks:
         raise ValidationError("Snapshot failed %d check(s); %s was not written" % (len(bad), out_path),

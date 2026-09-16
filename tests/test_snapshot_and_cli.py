@@ -10,7 +10,7 @@ from servicetitan_cli.snapshot import check_snapshot, find_duplicates, problems
 
 
 def test_check_snapshot_flags_every_failure_mode(demo_data):
-    ok = check_snapshot(demo_data, ["SPR", "LOC2"], demo=True)
+    ok = check_snapshot(demo_data, ["SPR", "LOC2"], synthetic=True)
     assert not problems(ok)
     broken = json.loads(json.dumps(demo_data))
     broken["isDemo"] = False
@@ -249,7 +249,7 @@ def test_cli_errors_are_structured(capsys, isolated_home, demo_path):
     assert code == 0 and out["range"]["start"].startswith("2026-03-01") and out["asOf"].startswith("2026-03-31T23:59:59")
 
 
-def test_cli_profile_and_tenant_lifecycle(capsys, isolated_home, monkeypatch):
+def test_cli_profile_and_tenant_lifecycle(capsys, isolated_home, monkeypatch, demo_data):
     code, out, _ = run_cli(capsys, "profile", "add", "acme", "--company", "Acme", "--timezone", "America/Denver")
     assert code == 0 and out["isDefault"] is True
     monkeypatch.setenv("APP_KEY_VAR", "app-key-value")
@@ -268,8 +268,12 @@ def test_cli_profile_and_tenant_lifecycle(capsys, isolated_home, monkeypatch):
     assert code == 0 and out["profile"]["tenants"][0]["secretsStored"] == ["appKey", "clientSecret"] and out["snapshot"]["exists"] is False
     code, out, _ = run_cli(capsys, "init")
     assert code == 0 and all(s["done"] for s in out["steps"] if s["step"] != "snapshot")
-    code, out, _ = run_cli(capsys, "demo", "--compact")
-    assert code == 0 and out["written"].endswith("acme.json")
+    from servicetitan_cli.paths import snapshot_path
+    path = snapshot_path("acme")                      # the synthetic fixture stands in for a fetched snapshot
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(demo_data, f)
+    assert path.endswith("acme.json")
     code, out, _ = run_cli(capsys, "metrics", "revenue", "--profile", "acme", "--range", "ytd")
     assert code == 0 and out["timezone"] == "America/Denver" and out["snapshot"]["isDemo"] is True
     code, out, _ = run_cli(capsys, "tenant", "remove", "acme", "--code", "MAIN")

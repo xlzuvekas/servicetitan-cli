@@ -59,12 +59,9 @@ class Snapshot(object):
         }
 
 
-def load_snapshot(path, demo_fallback=None):
+def load_snapshot(path):
     if not path or not os.path.exists(path):
-        hint = "Run `servicetitan fetch` to pull one from ServiceTitan"
-        if demo_fallback:
-            hint += ", or `servicetitan demo` to generate synthetic data"
-        raise DataError("No snapshot at %s" % path, hint=hint + ".")
+        raise DataError("No snapshot at %s" % path, hint="Run `servicetitan fetch` to pull one from ServiceTitan.")
     with open(path, encoding="utf-8") as f:
         try:
             data = json.load(f)
@@ -75,7 +72,7 @@ def load_snapshot(path, demo_fallback=None):
     return Snapshot(data, path)
 
 
-def check_snapshot(data, expected_codes, demo=False, max_age_hours=DEFAULT_MAX_AGE_HOURS, as_of=None,
+def check_snapshot(data, expected_codes, synthetic=False, max_age_hours=DEFAULT_MAX_AGE_HOURS, as_of=None,
                    floors=None):
     """Integrity checks. Returns a list of {check, ok, detail} dicts.
 
@@ -119,8 +116,8 @@ def check_snapshot(data, expected_codes, demo=False, max_age_hours=DEFAULT_MAX_A
     gen = parse_iso(stamp)
     if not gen:
         add("fresh", False, "generatedAt missing or unparsable")
-    elif demo or data.get("isDemo"):
-        add("fresh", True, "demo data; freshness not enforced")
+    elif synthetic or data.get("isDemo"):
+        add("fresh", True, "synthetic data; freshness not enforced")
     else:
         import datetime as dt
         age = hours_between(dt.datetime.now(UTC), gen)

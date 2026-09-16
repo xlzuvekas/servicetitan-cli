@@ -5,8 +5,10 @@ plain rendering of the same structure: dicts as ``key: value`` lines, lists of
 dicts as aligned tables. Nothing is printed to stdout except the result, so
 ``servicetitan ... | jq`` always works. Progress and warnings go to stderr.
 """
+import csv
 import datetime as _dt
 import decimal
+import io
 import json
 import sys
 
@@ -104,10 +106,74 @@ def to_text(data, indent=""):
     return indent + _fmt_scalar(data)
 
 
+CSV_TABLE_KEYS = ("records", "data", "hits", "entries", "results", "endpoints", "operations", "modules", "resources",
+                  "tenants", "technicians", "reps", "installers", "agents", "campaigns", "arByCustomer", "upcomingRenewals")
+
+
+def _csv_cell(v):
+    if v is None:
+        return ""
+    if isinstance(v, bool):
+        return "true" if v else "false"
+    if isinstance(v, (dict, list)):
+        return json.dumps(v, default=json_default, ensure_ascii=False)
+    if isinstance(v, (_dt.datetime, _dt.date)):
+        return v.isoformat()
+    return v
+
+
+def _csv_rows(data):
+    """The result's main table: the first list of dicts under a known key, else any list of dicts."""
+    if isinstance(data, list) and data and all(isinstance(x, dict) for x in data):
+        return None, data
+    if isinstance(data, dict):
+        for key in CSV_TABLE_KEYS:
+            v = data.get(key)
+            if isinstance(v, list) and v and all(isinstance(x, dict) for x in v):
+                return key, v
+        for key, v in data.items():
+            if isinstance(v, list) and v and all(isinstance(x, dict) for x in v):
+                return key, v
+    return None, None
+
+
+def _flat_pairs(value, prefix=""):
+    if isinstance(value, dict):
+        for k, v in value.items():
+            for pair in _flat_pairs(v, prefix + str(k) + "."):
+                yield pair
+    else:
+        yield prefix.rstrip("."), value
+
+
+def to_csv(data):
+    """CSV of the result's main table (records, data, hits ...), or key,value rows when there is none."""
+    key, rows = _csv_rows(data)
+    buf = io.StringIO()
+    if rows is None:
+        w = csv.writer(buf, lineterminator="\n")
+        w.writerow(["key", "value"])
+        for k, v in _flat_pairs(data):
+            w.writerow([k, _csv_cell(v)])
+        return buf.getvalue()
+    cols = []
+    for r in rows:
+        for k in r.keys():
+            if k not in cols:
+                cols.append(k)
+    w = csv.DictWriter(buf, fieldnames=cols, lineterminator="\n", extrasaction="ignore")
+    w.writeheader()
+    for r in rows:
+        w.writerow({c: _csv_cell(r.get(c)) for c in cols})
+    return buf.getvalue()
+
+
 def emit(data, fmt="json", pretty=True, stream=None):
     stream = stream or sys.stdout
     if fmt == "text":
         stream.write(to_text(data) + "\n")
+    elif fmt == "csv":
+        stream.write(to_csv(data))
     else:
         stream.write(dumps(data, pretty=pretty) + "\n")
     stream.flush()

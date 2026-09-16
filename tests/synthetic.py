@@ -1,14 +1,15 @@
-"""Synthetic snapshot so every command can be exercised before credentials exist.
+"""Synthetic snapshot for the test suite (test support, not a product feature).
 
-Matches the schema `fetch` produces, flagged ``isDemo: true`` so the dashboard
-shows its banner and `status` never reports it as live data. Names, customers
-and vendors are invented.
+Matches the schema `fetch` produces and is flagged ``isDemo: true`` so freshness
+checks are skipped and nothing ever mistakes it for live data. Names, customers
+and vendors are invented. `tests/conftest.py` builds one with a fixed seed and
+clock so every test sees the same numbers.
 """
 import datetime as dt
 import random
 
-from . import __version__
-from .dates import UTC, iso_z, parse_iso
+from servicetitan_cli import __version__
+from servicetitan_cli.dates import UTC, iso_z, parse_iso
 
 DEFAULT_SEED = 20260101
 FIRST = ["Alex", "Jordan", "Sam", "Riley", "Casey", "Morgan", "Taylor", "Jamie",
