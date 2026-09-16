@@ -11,6 +11,7 @@
 "summary":"Returns a paginated list of AP bills with detailed item information, filtering capabilities, and associated metadata",
 "kind":"paged",
 "export":false,
+"scope":"tn.acc.apbills:r",
 "query":[
 "ids",
 "batchId",
@@ -96,6 +97,7 @@
 "summary":"Returns a paginated list of filtered custom field types available for AP bills",
 "kind":"paged",
 "export":false,
+"scope":"tn.acc.apbills:r",
 "query":[
 "page",
 "pageSize",
@@ -123,6 +125,7 @@
 "summary":"Returns a single AP bill by its unique identifier with complete details including items, expense items, and associated metadata",
 "kind":"object",
 "export":false,
+"scope":"tn.acc.apbills:r",
 "query":[],
 "fields":[
 "batch",
@@ -179,6 +182,7 @@
 "summary":"Gets a paginated list of ap credits",
 "kind":"paged",
 "export":false,
+"scope":"tn.acc.apcredits:r",
 "query":[
 "ids",
 "page",
@@ -229,6 +233,7 @@
 "summary":"Returns a paginated list of filtered custom field types available for AP credits",
 "kind":"paged",
 "export":false,
+"scope":"tn.acc.apcredits:r",
 "query":[
 "page",
 "pageSize",
@@ -256,6 +261,7 @@
 "summary":"",
 "kind":"paged",
 "export":false,
+"scope":"tn.acc.appayments:r",
 "query":[
 "ids",
 "page",
@@ -301,6 +307,7 @@
 "summary":"Returns a paginated list of filtered custom field types available for AP payments",
 "kind":"paged",
 "export":false,
+"scope":"tn.acc.appayments:r",
 "query":[
 "page",
 "pageSize",
@@ -328,6 +335,7 @@
 "summary":"Gets a paginated list of deposits",
 "kind":"paged",
 "export":false,
+"scope":"tn.acc.bankdeposits:r",
 "query":[
 "ids",
 "modifiedBefore",
@@ -377,6 +385,7 @@
 "summary":"Gets a paginated list of transactions",
 "kind":"paged",
 "export":false,
+"scope":"tn.acc.bankdeposits:r",
 "query":[
 "page",
 "pageSize",
@@ -415,6 +424,7 @@
 "summary":"",
 "kind":"paged",
 "export":false,
+"scope":"tn.acc.creditmemos:r",
 "query":[
 "active",
 "ids",
@@ -479,6 +489,7 @@
 "summary":"",
 "kind":"paged",
 "export":false,
+"scope":"tn.acc.creditmemos:r",
 "query":[
 "creditMemoIds",
 "active",
@@ -518,6 +529,7 @@
 "summary":"Returns a paginated list of filtered custom field types available for credit memos",
 "kind":"paged",
 "export":false,
+"scope":"tn.acc.creditmemos:r",
 "query":[
 "page",
 "pageSize",
@@ -545,6 +557,7 @@
 "summary":"",
 "kind":"paged",
 "export":false,
+"scope":"tn.acc.creditmemos:r",
 "query":[
 "active",
 "businessUnitIds",
@@ -582,6 +595,7 @@
 "summary":"Returns a paginated list of expense transactions matching the filter criteria.",
 "kind":"paged",
 "export":false,
+"scope":"tn.acc.expensetransactions:r",
 "query":[
 "ids",
 "batchId",
@@ -648,9 +662,10 @@
 "title":"Accounting",
 "operation":"ExpenseTransactions_GetCustomFieldTypes",
 "path":"/accounting/v2/tenant/{tenant}/expense-transactions/custom-fields",
-"summary":"Returns a paginated list of custom-field type definitions available for expense transactions.\nScoped to CustomFieldOwnerType.Expense \u2014 definitions for other own",
+"summary":"Returns a paginated list of custom-field type definitions available for expense transactions.\nScoped to CustomFieldOwnerType.Expense \u2014 definitions for other owner types (e.g. Bill)\nare excluded. Read access is gateway-enforced via ViewExpenseTransactions.",
 "kind":"paged",
 "export":false,
+"scope":"tn.acc.expensetransactions:r",
 "query":[
 "page",
 "pageSize",
@@ -678,6 +693,7 @@
 "summary":"Returns a single expense transaction by its unique identifier.",
 "kind":"object",
 "export":false,
+"scope":"tn.acc.expensetransactions:r",
 "query":[],
 "fields":[
 "accountingFields",
@@ -722,6 +738,7 @@
 "summary":"Provides export feed for inventory bills",
 "kind":"paged",
 "export":true,
+"scope":"tn.acc.inventorybills:r",
 "query":[
 "from",
 "includeRecentChanges"
@@ -768,6 +785,7 @@
 "summary":"Provides export feed for invoice items",
 "kind":"paged",
 "export":true,
+"scope":"tn.acc.invoiceitems:r",
 "query":[
 "from",
 "includeRecentChanges"
@@ -823,6 +841,7 @@
 "summary":"Provides export feed for invoices",
 "kind":"paged",
 "export":true,
+"scope":"tn.acc.invoices:r",
 "query":[
 "from",
 "includeRecentChanges"
@@ -883,6 +902,7 @@
 "summary":"Provides export feed for payments",
 "kind":"paged",
 "export":true,
+"scope":"tn.acc.payments:r",
 "query":[
 "from",
 "includeRecentChanges"
@@ -921,6 +941,7 @@
 "summary":"Retrieves General Ledger accounts that match the given criteria",
 "kind":"paged",
 "export":false,
+"scope":"tn.acc.glaccounts:r",
 "query":[
 "ids",
 "names",
@@ -967,6 +988,7 @@
 "summary":"Retrieves General Ledger account types that match the given criteria",
 "kind":"paged",
 "export":false,
+"scope":"tn.acc.glaccounts:r",
 "query":[
 "ids",
 "names",
@@ -994,9 +1016,10 @@
 "title":"Accounting",
 "operation":"GlAccounts_GetWellKnownAccounts",
 "path":"/accounting/v2/tenant/{tenant}/gl-accounts/well-known",
-"summary":"Retrieves the tenant's well-known General Ledger accounts (CreditCardPayable, UncategorizedExpense),\nresolved by the authoritative default-account mapping rathe",
+"summary":"Retrieves the tenant's well-known General Ledger accounts (CreditCardPayable, UncategorizedExpense),\nresolved by the authoritative default-account mapping rather than by free-text account type.",
 "kind":"object",
 "export":false,
+"scope":"tn.acc.glaccounts:r",
 "query":[],
 "fields":[
 "creditCardPayableAccountId",
@@ -1011,6 +1034,7 @@
 "summary":"Retrieves single General Ledger account by account id",
 "kind":"object",
 "export":false,
+"scope":"tn.acc.glaccounts:r",
 "query":[],
 "fields":[
 "active",
@@ -1038,6 +1062,7 @@
 "summary":"",
 "kind":"array",
 "export":false,
+"scope":"tn.acc.inventorybills:r",
 "query":[
 "ids",
 "batchId",
@@ -1107,6 +1132,7 @@
 "summary":"Returns a paginated list of filtered custom field types available for inventory bills",
 "kind":"paged",
 "export":false,
+"scope":"tn.acc.inventorybills:r",
 "query":[
 "page",
 "pageSize",
@@ -1134,6 +1160,7 @@
 "summary":"",
 "kind":"paged",
 "export":false,
+"scope":"tn.acc.inventorybills:r",
 "query":[
 "ids",
 "batchId",
@@ -1203,6 +1230,7 @@
 "summary":"Retrieves a list of invoices.  By default, all invoices will be returned regardless of status.",
 "kind":"paged",
 "export":false,
+"scope":"tn.acc.invoices:r",
 "query":[
 "ids",
 "activeState",
@@ -1295,6 +1323,7 @@
 "summary":"Returns a paginated list of filtered custom field types available for invoices",
 "kind":"paged",
 "export":false,
+"scope":"tn.acc.invoices:r",
 "query":[
 "page",
 "pageSize",
@@ -1322,6 +1351,7 @@
 "summary":"",
 "kind":"paged",
 "export":false,
+"scope":"tn.acc.invoices:r",
 "query":[
 "page",
 "pageSize",
@@ -1348,6 +1378,7 @@
 "summary":"Gets a list of journal entries.",
 "kind":"paged",
 "export":false,
+"scope":"tn.acc.journalentries:r",
 "query":[
 "ids",
 "exportedFrom",
@@ -1409,6 +1440,7 @@
 "summary":"Gets a journal entry by ID",
 "kind":"object",
 "export":false,
+"scope":"tn.acc.journalentries:r",
 "query":[],
 "fields":[
 "createdOn",
@@ -1438,6 +1470,7 @@
 "summary":"Gets a list of journal entry items aggregated by account, business unit, transaction and pricebook item.",
 "kind":"paged",
 "export":false,
+"scope":"tn.acc.journalentries:r",
 "query":[
 "pageSize",
 "page",
@@ -1477,6 +1510,7 @@
 "summary":"Gets a list of journal entry items aggregated by account and business unit.",
 "kind":"paged",
 "export":false,
+"scope":"tn.acc.journalentries:r",
 "query":[
 "pageSize",
 "page",
@@ -1499,6 +1533,7 @@
 "summary":"Gets a list of payment terms",
 "kind":"paged",
 "export":false,
+"scope":"tn.acc.paymentterms:r",
 "query":[
 "ids",
 "createdBefore",
@@ -1533,6 +1568,7 @@
 "summary":"Gets Payment Term",
 "kind":"object",
 "export":false,
+"scope":"tn.acc.paymentterms:r",
 "query":[],
 "fields":[
 "active",
@@ -1557,6 +1593,7 @@
 "summary":"Gets a list of payment types",
 "kind":"paged",
 "export":false,
+"scope":"tn.acc.paymenttypes:r",
 "query":[
 "ids",
 "active",
@@ -1581,6 +1618,7 @@
 "summary":"Gets payment type specified by ID",
 "kind":"object",
 "export":false,
+"scope":"tn.acc.paymenttypes:r",
 "query":[],
 "fields":[
 "createdOn",
@@ -1597,6 +1635,7 @@
 "summary":"Gets a paginated list of payments",
 "kind":"paged",
 "export":false,
+"scope":"tn.acc.payments:r",
 "query":[
 "activeState",
 "appliedToInvoiceIds",
@@ -1658,6 +1697,7 @@
 "summary":"Returns a paginated list of filtered custom field types available for payments",
 "kind":"paged",
 "export":false,
+"scope":"tn.acc.payments:r",
 "query":[
 "page",
 "pageSize",
@@ -1685,6 +1725,7 @@
 "summary":"Returns a paginated list of Remittance Vendors with detailed item information, filtering capabilities, and associated metadata",
 "kind":"paged",
 "export":false,
+"scope":"tn.acc.remittancevendors:r",
 "query":[
 "ids",
 "active",
@@ -1718,6 +1759,7 @@
 "summary":"Returns a single Remittance Vendor by its unique identifier with complete details including items, expense items, and associated metadata",
 "kind":"object",
 "export":false,
+"scope":"tn.acc.remittancevendors:r",
 "query":[],
 "fields":[
 "active",
@@ -1740,6 +1782,7 @@
 "summary":"Get a list of tax zones and their rates.",
 "kind":"paged",
 "export":false,
+"scope":"tn.acc.taxzones:r",
 "query":[
 "ids",
 "active",
@@ -1772,6 +1815,7 @@
 "summary":"Gets a list of booking provider tags",
 "kind":"paged",
 "export":false,
+"scope":"tn.crm.bookingprovidertags:r",
 "query":[
 "name",
 "ids",
@@ -1802,6 +1846,7 @@
 "summary":"Gets a single booking provider tag by ID",
 "kind":"object",
 "export":false,
+"scope":"tn.crm.bookingprovidertags:r",
 "query":[],
 "fields":[
 "active",
@@ -1821,6 +1866,7 @@
 "summary":"Gets a list of bookings for a booking provider",
 "kind":"paged",
 "export":false,
+"scope":"tn.crm.bookings:r",
 "query":[
 "ids",
 "page",
@@ -1865,6 +1911,7 @@
 "summary":"Gets a booking by ID for a booking provider",
 "kind":"object",
 "export":false,
+"scope":"tn.crm.bookings:r",
 "query":[],
 "fields":[
 "address",
@@ -1898,6 +1945,7 @@
 "summary":"Get a list of contacts for a booking for a booking provider",
 "kind":"paged",
 "export":false,
+"scope":"tn.crm.bookings:r",
 "query":[
 "page",
 "pageSize",
@@ -1919,6 +1967,7 @@
 "summary":"Gets a list of bookings",
 "kind":"paged",
 "export":false,
+"scope":"tn.crm.bookings:r",
 "query":[
 "ids",
 "page",
@@ -1963,6 +2012,7 @@
 "summary":"Gets a booking by ID",
 "kind":"object",
 "export":false,
+"scope":"tn.crm.bookings:r",
 "query":[],
 "fields":[
 "address",
@@ -1996,6 +2046,7 @@
 "summary":"Get a list of contacts for a booking",
 "kind":"paged",
 "export":false,
+"scope":"tn.crm.bookings:r",
 "query":[
 "page",
 "pageSize",
@@ -2017,6 +2068,7 @@
 "summary":"Gets a list of contacts",
 "kind":"paged",
 "export":false,
+"scope":"tn.crm.contacts:r",
 "query":[
 "name",
 "title",
@@ -2051,6 +2103,7 @@
 "summary":"Search for contact methods",
 "kind":"paged",
 "export":false,
+"scope":"tn.crm.contacts:r",
 "query":[
 "contactId",
 "referenceId",
@@ -2086,6 +2139,7 @@
 "summary":"Gets a list of preferences metadata",
 "kind":"array",
 "export":false,
+"scope":"tn.crm.contacts:r",
 "query":[],
 "fields":[
 "dataType",
@@ -2102,6 +2156,7 @@
 "summary":"Gets a list of contacts for a specified relationship ID",
 "kind":"paged",
 "export":false,
+"scope":"tn.crm.contacts:r",
 "query":[
 "name",
 "title",
@@ -2136,6 +2191,7 @@
 "summary":"Gets a list of contact methods for a specified contact ID",
 "kind":"paged",
 "export":false,
+"scope":"tn.crm.contacts:r",
 "query":[
 "referenceId",
 "type",
@@ -2170,6 +2226,7 @@
 "summary":"Gets a contact method specified by ID",
 "kind":"object",
 "export":false,
+"scope":"tn.crm.contacts:r",
 "query":[],
 "fields":[
 "contactId",
@@ -2192,6 +2249,7 @@
 "summary":"Gets a list of contact preferences for a specified contact method ID",
 "kind":"array",
 "export":false,
+"scope":"tn.crm.contacts:r",
 "query":[],
 "fields":[
 "dataType",
@@ -2207,6 +2265,7 @@
 "summary":"Gets a contact preference specified by preference name",
 "kind":"object",
 "export":false,
+"scope":"tn.crm.contacts:r",
 "query":[],
 "fields":[
 "dataType",
@@ -2222,6 +2281,7 @@
 "summary":"Gets a list of contact relationships",
 "kind":"paged",
 "export":false,
+"scope":"tn.crm.contacts:r",
 "query":[
 "relatedEntityId",
 "typeSlug",
@@ -2250,6 +2310,7 @@
 "summary":"Gets a contact specified by ID",
 "kind":"object",
 "export":false,
+"scope":"tn.crm.contacts:r",
 "query":[],
 "fields":[
 "createdBy",
@@ -2271,6 +2332,7 @@
 "summary":"Gets a list of Customers",
 "kind":"paged",
 "export":false,
+"scope":"tn.crm.customers:r",
 "query":[
 "page",
 "pageSize",
@@ -2325,9 +2387,10 @@
 "title":"CRM",
 "operation":"Customers_GetModifiedContactsList",
 "path":"/crm/v2/tenant/{tenant}/customers/contacts",
-"summary":"Gets a list of contacts for a specific modified-on date range or by their Customer IDs. Either CustomerIds, modifiedOn or modifiedOnOrAfter parameter must be sp",
+"summary":"Gets a list of contacts for a specific modified-on date range or by their Customer IDs. Either CustomerIds, modifiedOn or modifiedOnOrAfter parameter must be specified",
 "kind":"paged",
 "export":false,
+"scope":"tn.crm.customers:r",
 "query":[
 "page",
 "pageSize",
@@ -2358,6 +2421,7 @@
 "summary":"Gets a list of custom field types available for customers",
 "kind":"paged",
 "export":false,
+"scope":"tn.crm.customers:r",
 "query":[
 "page",
 "pageSize",
@@ -2385,6 +2449,7 @@
 "summary":"Gets a Customer specified by ID",
 "kind":"object",
 "export":false,
+"scope":"tn.crm.customers:r",
 "query":[],
 "fields":[
 "active",
@@ -2417,6 +2482,7 @@
 "summary":"Gets a list of contacts for the specified customer",
 "kind":"paged",
 "export":false,
+"scope":"tn.crm.customers:r",
 "query":[
 "page",
 "pageSize",
@@ -2441,6 +2507,7 @@
 "summary":"Gets a list of notes for a customer",
 "kind":"paged",
 "export":false,
+"scope":"tn.crm.customers:r",
 "query":[
 "page",
 "pageSize",
@@ -2467,6 +2534,7 @@
 "summary":"Provides export feed for bookings",
 "kind":"paged",
 "export":true,
+"scope":"tn.crm.bookings:r",
 "query":[
 "from",
 "includeRecentChanges"
@@ -2504,6 +2572,7 @@
 "summary":"Provides export feed for customers",
 "kind":"paged",
 "export":true,
+"scope":"tn.crm.customers:r",
 "query":[
 "from",
 "includeRecentChanges"
@@ -2539,6 +2608,7 @@
 "summary":"Provides export feed for customer contacts",
 "kind":"paged",
 "export":true,
+"scope":"tn.crm.customers:r",
 "query":[
 "from",
 "includeRecentChanges"
@@ -2564,6 +2634,7 @@
 "summary":"Provides export feed for leads",
 "kind":"paged",
 "export":true,
+"scope":"tn.crm.leads:r",
 "query":[
 "from",
 "includeRecentChanges"
@@ -2610,6 +2681,7 @@
 "summary":"Provides export feed for appointments",
 "kind":"paged",
 "export":true,
+"scope":"tn.crm.locations:r",
 "query":[
 "from",
 "includeRecentChanges"
@@ -2640,6 +2712,7 @@
 "summary":"Provides export feed for locations contacts",
 "kind":"paged",
 "export":true,
+"scope":"tn.crm.locations:r",
 "query":[
 "from",
 "includeRecentChanges"
@@ -2665,6 +2738,7 @@
 "summary":"Gets a list of leads",
 "kind":"paged",
 "export":false,
+"scope":"tn.crm.leads:r",
 "query":[
 "page",
 "pageSize",
@@ -2731,6 +2805,7 @@
 "summary":"Gets a lead specified by ID",
 "kind":"object",
 "export":false,
+"scope":"tn.crm.leads:r",
 "query":[],
 "fields":[
 "bookingId",
@@ -2773,6 +2848,7 @@
 "summary":"Gets notes for a lead",
 "kind":"paged",
 "export":false,
+"scope":"tn.crm.leads:r",
 "query":[
 "page",
 "pageSize",
@@ -2799,6 +2875,7 @@
 "summary":"Gets a list of locations",
 "kind":"paged",
 "export":false,
+"scope":"tn.crm.locations:r",
 "query":[
 "ids",
 "name",
@@ -2847,9 +2924,10 @@
 "title":"CRM",
 "operation":"Locations_GetLocationsContactsList",
 "path":"/crm/v2/tenant/{tenant}/locations/contacts",
-"summary":"Gets a list of contacts for a specific ModifiedOn date range, CreatedOn date range or by their Location IDs. Either LocationIds, modifiedOn, modifiedOnOrAfter, ",
+"summary":"Gets a list of contacts for a specific ModifiedOn date range, CreatedOn date range or by their Location IDs. Either LocationIds, modifiedOn, modifiedOnOrAfter, createdBefore or createdOnOrAfter parameter must be specified.",
 "kind":"paged",
 "export":false,
+"scope":"tn.crm.locations:r",
 "query":[
 "page",
 "pageSize",
@@ -2880,6 +2958,7 @@
 "summary":"Gets a list of custom field types available for locations",
 "kind":"paged",
 "export":false,
+"scope":"tn.crm.locations:r",
 "query":[
 "page",
 "pageSize",
@@ -2907,6 +2986,7 @@
 "summary":"Gets a location specified by ID",
 "kind":"object",
 "export":false,
+"scope":"tn.crm.locations:r",
 "query":[],
 "fields":[
 "active",
@@ -2934,6 +3014,7 @@
 "summary":"Gets a list of contacts for the specified location",
 "kind":"paged",
 "export":false,
+"scope":"tn.crm.locations:r",
 "query":[
 "page",
 "pageSize",
@@ -2958,6 +3039,7 @@
 "summary":"Gets a list of notes on the specified location",
 "kind":"paged",
 "export":false,
+"scope":"tn.crm.locations:r",
 "query":[
 "page",
 "pageSize",
@@ -2984,6 +3066,7 @@
 "summary":"",
 "kind":"object",
 "export":false,
+"scope":"tn.crm.locations:r",
 "query":[],
 "fields":[]
 },
@@ -2995,6 +3078,7 @@
 "summary":"Provides export feed for technician ratings",
 "kind":"paged",
 "export":true,
+"scope":"tn.csi.technicianrating:r",
 "query":[
 "from",
 "includeRecentChanges"
@@ -3016,6 +3100,7 @@
 "summary":"Gets a list of technician ratings",
 "kind":"paged",
 "export":false,
+"scope":"tn.csi.technicianrating:r",
 "query":[
 "technicianId",
 "jobId",
@@ -3046,6 +3131,7 @@
 "summary":"Gets a list of appointment assignments",
 "kind":"paged",
 "export":false,
+"scope":"tn.dis.appointmentassignments:r",
 "query":[
 "ids",
 "appointmentIds",
@@ -3083,6 +3169,7 @@
 "summary":"",
 "kind":"paged",
 "export":false,
+"scope":"tn.dis.arrivalwindows:r",
 "query":[
 "page",
 "pageSize",
@@ -3107,6 +3194,7 @@
 "summary":"",
 "kind":"object",
 "export":false,
+"scope":"tn.dis.arrivalwindows:r",
 "query":[],
 "fields":[
 "configuration"
@@ -3120,6 +3208,7 @@
 "summary":"",
 "kind":"object",
 "export":false,
+"scope":"tn.dis.arrivalwindows:r",
 "query":[],
 "fields":[
 "active",
@@ -3137,6 +3226,7 @@
 "summary":"Gets the business hours.",
 "kind":"object",
 "export":false,
+"scope":"tn.dis.businesshours:r",
 "query":[],
 "fields":[
 "saturday",
@@ -3152,6 +3242,7 @@
 "summary":"Provides export feed for appointment assignments",
 "kind":"paged",
 "export":true,
+"scope":"tn.dis.appointmentassignments:r",
 "query":[
 "active",
 "from",
@@ -3180,6 +3271,7 @@
 "summary":"Gets a list of non-job appointments",
 "kind":"paged",
 "export":false,
+"scope":"tn.dis.nonjobappointments:r",
 "query":[
 "technicianId",
 "startsOnOrAfter",
@@ -3224,6 +3316,7 @@
 "summary":"",
 "kind":"object",
 "export":false,
+"scope":"tn.dis.nonjobappointments:r",
 "query":[],
 "fields":[
 "active",
@@ -3251,6 +3344,7 @@
 "summary":"Gets a list of teams",
 "kind":"paged",
 "export":false,
+"scope":"tn.dis.teams:r",
 "query":[
 "page",
 "pageSize",
@@ -3279,6 +3373,7 @@
 "summary":"Gets a specific team",
 "kind":"object",
 "export":false,
+"scope":"tn.dis.teams:r",
 "query":[],
 "fields":[
 "active",
@@ -3297,6 +3392,7 @@
 "summary":"Gets a list of technician shifts",
 "kind":"paged",
 "export":false,
+"scope":"tn.dis.technicianshifts:r",
 "query":[
 "startsOnOrAfter",
 "endsOnOrBefore",
@@ -3336,6 +3432,7 @@
 "summary":"Gets a specific technician shift",
 "kind":"object",
 "export":false,
+"scope":"tn.dis.technicianshifts:r",
 "query":[],
 "fields":[
 "active",
@@ -3359,6 +3456,7 @@
 "summary":"Gets a list of technician skills",
 "kind":"paged",
 "export":false,
+"scope":"tn.dis.technicianskills:r",
 "query":[
 "technicianId",
 "page",
@@ -3389,6 +3487,7 @@
 "summary":"Gets a specific technician skill",
 "kind":"object",
 "export":false,
+"scope":"tn.dis.technicianskills:r",
 "query":[],
 "fields":[
 "active",
@@ -3408,6 +3507,7 @@
 "summary":"",
 "kind":"object",
 "export":false,
+"scope":"tn.dis.techniciantracking:r",
 "query":[
 "technicianId",
 "appointmentId"
@@ -3424,6 +3524,7 @@
 "summary":"Gets a list of zones",
 "kind":"paged",
 "export":false,
+"scope":"tn.dis.zones:r",
 "query":[
 "page",
 "pageSize",
@@ -3460,6 +3561,7 @@
 "summary":"Gets a specific zone",
 "kind":"object",
 "export":false,
+"scope":"tn.dis.zones:r",
 "query":[],
 "fields":[
 "active",
@@ -3486,6 +3588,7 @@
 "summary":"Gets a list of equipment systems",
 "kind":"paged",
 "export":false,
+"scope":"tn.eqs.equipmentsystems:r",
 "query":[
 "locationIds",
 "ids",
@@ -3521,6 +3624,7 @@
 "summary":"Gets an equipment system specified by ID",
 "kind":"object",
 "export":false,
+"scope":"tn.eqs.equipmentsystems:r",
 "query":[],
 "fields":[
 "active",
@@ -3546,6 +3650,7 @@
 "summary":"Gets a list of equipment types",
 "kind":"paged",
 "export":false,
+"scope":"tn.eqs.equipmenttypes:r",
 "query":[
 "ids",
 "name",
@@ -3575,6 +3680,7 @@
 "summary":"Gets equipment type specified by ID",
 "kind":"object",
 "export":false,
+"scope":"tn.eqs.equipmenttypes:r",
 "query":[],
 "fields":[
 "active",
@@ -3592,6 +3698,7 @@
 "summary":"",
 "kind":"paged",
 "export":true,
+"scope":"tn.eqs.equipmentsystems:r",
 "query":[
 "from",
 "includeRecentChanges"
@@ -3618,6 +3725,7 @@
 "summary":"",
 "kind":"paged",
 "export":true,
+"scope":"tn.eqs.installedequipment:r",
 "query":[
 "from",
 "includeRecentChanges"
@@ -3663,6 +3771,7 @@
 "summary":"",
 "kind":"paged",
 "export":false,
+"scope":"tn.eqs.installedequipment:r",
 "query":[
 "locationIds",
 "ids",
@@ -3721,6 +3830,7 @@
 "summary":"",
 "kind":"unknown",
 "export":false,
+"scope":"tn.eqs.installedequipment:r",
 "query":[
 "path"
 ],
@@ -3734,6 +3844,7 @@
 "summary":"",
 "kind":"paged",
 "export":false,
+"scope":"tn.eqs.installedequipment:r",
 "query":[
 "page",
 "pageSize",
@@ -3759,6 +3870,7 @@
 "summary":"",
 "kind":"object",
 "export":false,
+"scope":"tn.eqs.installedequipment:r",
 "query":[],
 "fields":[
 "active",
@@ -3802,6 +3914,7 @@
 "summary":"Downloads an asset by path. Redirects to a temporary download URL",
 "kind":"unknown",
 "export":false,
+"scope":"tn.fdgs.assets:r",
 "query":[
 "path"
 ],
@@ -3815,6 +3928,7 @@
 "summary":"Gets a list of findings",
 "kind":"paged",
 "export":false,
+"scope":"tn.fdgs.locationfindings:r",
 "query":[
 "ids",
 "createdBefore",
@@ -3857,6 +3971,7 @@
 "summary":"Gets finding specified by ID",
 "kind":"object",
 "export":false,
+"scope":"tn.fdgs.locationfindings:r",
 "query":[],
 "fields":[
 "active",
@@ -3889,6 +4004,7 @@
 "summary":"Gets a paginated list of attachments for a finding",
 "kind":"paged",
 "export":false,
+"scope":"tn.fdgs.locationfindings:r",
 "query":[
 "ids",
 "createdBefore",
@@ -3913,6 +4029,7 @@
 "summary":"Gets an attachment for a finding by ID",
 "kind":"object",
 "export":false,
+"scope":"tn.fdgs.locationfindings:r",
 "query":[],
 "fields":[
 "fileName",
@@ -3929,6 +4046,7 @@
 "summary":"Retrieves a list of all FleetPro vehicles for the current tenant.",
 "kind":"array",
 "export":false,
+"scope":"tn.flt.vehicles:r",
 "query":[],
 "fields":[
 "driverName",
@@ -3944,6 +4062,7 @@
 "summary":"Retrieve Form data",
 "kind":"paged",
 "export":false,
+"scope":"tn.frm.forms:r",
 "query":[
 "hasConditionalLogic",
 "hasTriggers",
@@ -3980,6 +4099,7 @@
 "summary":"Downloads a specified job attachment.",
 "kind":"unknown",
 "export":false,
+"scope":"tn.frm.jobs:r",
 "query":[],
 "fields":[]
 },
@@ -3991,6 +4111,7 @@
 "summary":"Gets Attachments on the specified Job",
 "kind":"unknown",
 "export":false,
+"scope":"tn.frm.jobs:r",
 "query":[
 "createdBefore",
 "createdOnOrAfter",
@@ -4009,6 +4130,7 @@
 "summary":"Retrieve Form Submission Data",
 "kind":"paged",
 "export":false,
+"scope":"tn.frm.submissions:r",
 "query":[
 "formIds",
 "active",
@@ -4042,6 +4164,7 @@
 "summary":"Get a list of inventory adjustments",
 "kind":"paged",
 "export":false,
+"scope":"tn.inv.adjustments:r",
 "query":[
 "ids",
 "active",
@@ -4103,6 +4226,7 @@
 "summary":"Provides export feed for adjustments",
 "kind":"paged",
 "export":true,
+"scope":"tn.inv.adjustments:r",
 "query":[
 "from",
 "includeRecentChanges"
@@ -4141,6 +4265,7 @@
 "summary":"Provides export feed for purchase orders",
 "kind":"paged",
 "export":true,
+"scope":"tn.inv.purchaseorders:r",
 "query":[
 "from",
 "includeRecentChanges"
@@ -4184,6 +4309,7 @@
 "summary":"Provides export feed for returns",
 "kind":"paged",
 "export":true,
+"scope":"tn.inv.returns:r",
 "query":[
 "from",
 "includeRecentChanges"
@@ -4231,6 +4357,7 @@
 "summary":"Provides export feed for transfers",
 "kind":"paged",
 "export":true,
+"scope":"tn.inv.transfers:r",
 "query":[
 "from",
 "includeRecentChanges"
@@ -4275,6 +4402,7 @@
 "summary":"Get a list of inventory template details",
 "kind":"paged",
 "export":false,
+"scope":"tn.inv.inventorytemplates:r",
 "query":[
 "ids",
 "page",
@@ -4307,6 +4435,7 @@
 "summary":"Get a list of purchase order markups",
 "kind":"paged",
 "export":false,
+"scope":"tn.inv.purchaseordermarkups:r",
 "query":[
 "ids",
 "createdBefore",
@@ -4335,6 +4464,7 @@
 "summary":"Get purchase order markup by Id",
 "kind":"object",
 "export":false,
+"scope":"tn.inv.purchaseordermarkups:r",
 "query":[],
 "fields":[
 "createdOn",
@@ -4353,6 +4483,7 @@
 "summary":"Get a list of purchase order types",
 "kind":"paged",
 "export":false,
+"scope":"tn.inv.purchaseordertypes:r",
 "query":[
 "active",
 "createdBefore",
@@ -4390,6 +4521,7 @@
 "summary":"Get a list of purchase orders",
 "kind":"paged",
 "export":false,
+"scope":"tn.inv.purchaseorders:r",
 "query":[
 "ids",
 "status",
@@ -4450,6 +4582,7 @@
 "summary":"Get a list of purchase order requests",
 "kind":"paged",
 "export":false,
+"scope":"tn.inv.purchaseorders:r",
 "query":[
 "ids",
 "requestStatus",
@@ -4504,6 +4637,7 @@
 "summary":"Get purchase order by Id",
 "kind":"object",
 "export":false,
+"scope":"tn.inv.purchaseorders:r",
 "query":[],
 "fields":[
 "batchId",
@@ -4544,6 +4678,7 @@
 "summary":"Get a list of receipts",
 "kind":"paged",
 "export":false,
+"scope":"tn.inv.receipts:r",
 "query":[
 "ids",
 "active",
@@ -4608,6 +4743,7 @@
 "summary":"Returns the list of Return Types",
 "kind":"paged",
 "export":false,
+"scope":"tn.inv.returntypes:r",
 "query":[
 "activeOnly",
 "name",
@@ -4640,6 +4776,7 @@
 "summary":"Get a list of returns",
 "kind":"paged",
 "export":false,
+"scope":"tn.inv.returns:r",
 "query":[
 "ids",
 "active",
@@ -4711,6 +4848,7 @@
 "summary":"Get a list of transfers",
 "kind":"paged",
 "export":false,
+"scope":"tn.inv.transfers:r",
 "query":[
 "ids",
 "statuses",
@@ -4777,6 +4915,7 @@
 "summary":"Get a list of trucks",
 "kind":"paged",
 "export":false,
+"scope":"tn.inv.trucks:r",
 "query":[
 "ids",
 "active",
@@ -4813,6 +4952,7 @@
 "summary":"Get a list of vendors",
 "kind":"paged",
 "export":false,
+"scope":"tn.inv.vendors:r",
 "query":[
 "ids",
 "name",
@@ -4856,6 +4996,7 @@
 "summary":"Returns a paginated list of filtered custom field types available for vendors",
 "kind":"paged",
 "export":false,
+"scope":"tn.inv.vendors:r",
 "query":[
 "page",
 "pageSize",
@@ -4883,6 +5024,7 @@
 "summary":"Get vendor by Id",
 "kind":"object",
 "export":false,
+"scope":"tn.inv.vendors:r",
 "query":[
 "externalDataApplicationGuid",
 "externalDataKey",
@@ -4913,6 +5055,7 @@
 "summary":"Get a list of warehouses",
 "kind":"paged",
 "export":false,
+"scope":"tn.inv.warehouses:r",
 "query":[
 "ids",
 "active",
@@ -4947,6 +5090,7 @@
 "summary":"Gets a list of call reasons",
 "kind":"paged",
 "export":false,
+"scope":"tn.jbce.callreasons:r",
 "query":[
 "page",
 "pageSize",
@@ -4975,6 +5119,7 @@
 "summary":"Gets a list of appointments",
 "kind":"paged",
 "export":false,
+"scope":"tn.jpm.appointments:r",
 "query":[
 "ids",
 "active",
@@ -5024,6 +5169,7 @@
 "summary":"Gets appointment specified by ID",
 "kind":"object",
 "export":false,
+"scope":"tn.jpm.appointments:r",
 "query":[],
 "fields":[
 "active",
@@ -5053,6 +5199,7 @@
 "summary":"Provides export feed for appointments",
 "kind":"paged",
 "export":true,
+"scope":"tn.jpm.appointments:r",
 "query":[
 "active",
 "from",
@@ -5086,6 +5233,7 @@
 "summary":"Provides export feed for job canceled logs",
 "kind":"paged",
 "export":true,
+"scope":"tn.jpm.jobcanceledlogs:r",
 "query":[
 "from",
 "includeRecentChanges"
@@ -5108,6 +5256,7 @@
 "summary":"Provides export feed for job status history.",
 "kind":"paged",
 "export":true,
+"scope":"tn.jpm.jobhistory:r",
 "query":[
 "from",
 "includeRecentChanges"
@@ -5125,6 +5274,7 @@
 "summary":"Provides export feed for job notes",
 "kind":"paged",
 "export":true,
+"scope":"tn.jpm.jobnotes:r",
 "query":[
 "from",
 "includeRecentChanges"
@@ -5148,6 +5298,7 @@
 "summary":"Provides export feed for jobs",
 "kind":"paged",
 "export":true,
+"scope":"tn.jpm.jobs:r",
 "query":[
 "from",
 "includeRecentChanges"
@@ -5203,6 +5354,7 @@
 "summary":"Provides export feed for project notes",
 "kind":"paged",
 "export":true,
+"scope":"tn.jpm.projectnotes:r",
 "query":[
 "from",
 "includeRecentChanges"
@@ -5226,6 +5378,7 @@
 "summary":"Provides export feed for projects",
 "kind":"paged",
 "export":true,
+"scope":"tn.jpm.projects:r",
 "query":[
 "from",
 "includeRecentChanges"
@@ -5264,6 +5417,7 @@
 "summary":"Gets a list of job cancel reasons",
 "kind":"paged",
 "export":false,
+"scope":"tn.jpm.jobcancelreasons:r",
 "query":[
 "page",
 "pageSize",
@@ -5291,6 +5445,7 @@
 "summary":"Gets a list of job hold reasons",
 "kind":"paged",
 "export":false,
+"scope":"tn.jpm.jobholdreasons:r",
 "query":[
 "page",
 "pageSize",
@@ -5318,6 +5473,7 @@
 "summary":"Gets a list of job types",
 "kind":"paged",
 "export":false,
+"scope":"tn.jpm.jobtypes:r",
 "query":[
 "name",
 "minDuration",
@@ -5367,6 +5523,7 @@
 "summary":"Gets a job type by ID",
 "kind":"object",
 "export":false,
+"scope":"tn.jpm.jobtypes:r",
 "query":[
 "externalDataApplicationGuid"
 ],
@@ -5401,6 +5558,7 @@
 "summary":"Gets a list of jobs",
 "kind":"paged",
 "export":false,
+"scope":"tn.jpm.jobs:r",
 "query":[
 "page",
 "pageSize",
@@ -5490,6 +5648,7 @@
 "summary":"Gets a list of cancel reasons for specific jobs",
 "kind":"paged",
 "export":false,
+"scope":"tn.jpm.jobs:r",
 "query":[
 "ids"
 ],
@@ -5508,6 +5667,7 @@
 "summary":"Returns a list of custom field types available for projects",
 "kind":"paged",
 "export":false,
+"scope":"tn.jpm.jobs:r",
 "query":[
 "page",
 "pageSize",
@@ -5535,6 +5695,7 @@
 "summary":"Gets a list of hold reasons for specific jobs",
 "kind":"paged",
 "export":false,
+"scope":"tn.jpm.jobs:r",
 "query":[
 "ids"
 ],
@@ -5554,6 +5715,7 @@
 "summary":"Gets a job by ID",
 "kind":"object",
 "export":false,
+"scope":"tn.jpm.jobs:r",
 "query":[
 "externalDataApplicationGuid"
 ],
@@ -5607,6 +5769,7 @@
 "summary":"Get booked log for the specified job",
 "kind":"object",
 "export":false,
+"scope":"tn.jpm.jobs:r",
 "query":[],
 "fields":[
 "active",
@@ -5628,6 +5791,7 @@
 "summary":"Get a list of cancelled logs for the specified job",
 "kind":"paged",
 "export":false,
+"scope":"tn.jpm.jobs:r",
 "query":[
 "page",
 "pageSize",
@@ -5651,6 +5815,7 @@
 "summary":"Gets the list of equipment IDs attached to the specified job",
 "kind":"object",
 "export":false,
+"scope":"tn.jpm.jobs:r",
 "query":[],
 "fields":[
 "equipmentIds"
@@ -5664,6 +5829,7 @@
 "summary":"Gets a list of history entries for the specified job",
 "kind":"object",
 "export":false,
+"scope":"tn.jpm.jobs:r",
 "query":[],
 "fields":[
 "history"
@@ -5677,6 +5843,7 @@
 "summary":"Gets a list of notes on the specified job",
 "kind":"paged",
 "export":false,
+"scope":"tn.jpm.jobs:r",
 "query":[
 "page",
 "pageSize",
@@ -5698,6 +5865,7 @@
 "summary":"Gets a list of project statuses",
 "kind":"paged",
 "export":false,
+"scope":"tn.jpm.projectstatuses:r",
 "query":[
 "name",
 "ids",
@@ -5725,6 +5893,7 @@
 "summary":"Gets a project status by ID",
 "kind":"object",
 "export":false,
+"scope":"tn.jpm.projectstatuses:r",
 "query":[],
 "fields":[
 "id",
@@ -5741,6 +5910,7 @@
 "summary":"Gets a list of project sub statuses",
 "kind":"paged",
 "export":false,
+"scope":"tn.jpm.projectsubstatuses:r",
 "query":[
 "name",
 "statusId",
@@ -5772,6 +5942,7 @@
 "summary":"Gets a project sub status by ID",
 "kind":"object",
 "export":false,
+"scope":"tn.jpm.projectsubstatuses:r",
 "query":[],
 "fields":[
 "active",
@@ -5790,6 +5961,7 @@
 "summary":"Gets a list of project types",
 "kind":"paged",
 "export":false,
+"scope":"tn.jpm.projecttypes:r",
 "query":[
 "page",
 "pageSize",
@@ -5810,6 +5982,7 @@
 "summary":"Gets a project type by ID",
 "kind":"object",
 "export":false,
+"scope":"tn.jpm.projecttypes:r",
 "query":[],
 "fields":[
 "createdById",
@@ -5826,6 +5999,7 @@
 "summary":"Gets a list of projects",
 "kind":"paged",
 "export":false,
+"scope":"tn.jpm.projects:r",
 "query":[
 "ids",
 "number",
@@ -5892,6 +6066,7 @@
 "summary":"Returns a list of custom field types available for projects",
 "kind":"paged",
 "export":false,
+"scope":"tn.jpm.projects:r",
 "query":[
 "page",
 "pageSize",
@@ -5919,6 +6094,7 @@
 "summary":"Gets a project by ID",
 "kind":"object",
 "export":false,
+"scope":"tn.jpm.projects:r",
 "query":[
 "externalDataApplicationGuid"
 ],
@@ -5955,6 +6131,7 @@
 "summary":"Gets a list of notes on the specified project",
 "kind":"paged",
 "export":false,
+"scope":"tn.jpm.projects:r",
 "query":[
 "page",
 "pageSize",
@@ -5976,6 +6153,7 @@
 "summary":"Gets a list of daily logs for the specified project",
 "kind":"paged",
 "export":false,
+"scope":"tn.jpm.projects:r",
 "query":[
 "dateFrom",
 "dateTo",
@@ -6000,6 +6178,7 @@
 "summary":"Gets a daily log by ID",
 "kind":"object",
 "export":false,
+"scope":"tn.jpm.projects:r",
 "query":[],
 "fields":[
 "attachments",
@@ -6022,6 +6201,7 @@
 "summary":"Gets the content of a daily log attachment",
 "kind":"unknown",
 "export":false,
+"scope":"tn.jpm.projects:r",
 "query":[],
 "fields":[]
 },
@@ -6033,6 +6213,7 @@
 "summary":"",
 "kind":"paged",
 "export":false,
+"scope":"tn.jpm.budgetcodes:r",
 "query":[
 "budgetCodeIds",
 "segmentIds",
@@ -6056,6 +6237,7 @@
 "summary":"",
 "kind":"object",
 "export":false,
+"scope":"tn.jpm.budgetcodes:r",
 "query":[
 "codes"
 ],
@@ -6071,6 +6253,7 @@
 "summary":"",
 "kind":"paged",
 "export":false,
+"scope":"tn.jpm.budgetcodes:r",
 "query":[
 "budgetCodeIds",
 "segmentIds",
@@ -6094,6 +6277,7 @@
 "summary":"",
 "kind":"object",
 "export":false,
+"scope":"tn.jpm.budgetcodes:r",
 "query":[
 "codes"
 ],
@@ -6109,6 +6293,7 @@
 "summary":"",
 "kind":"paged",
 "export":false,
+"scope":"tn.jpm.segments:r",
 "query":[
 "page",
 "pageSize",
@@ -6131,6 +6316,7 @@
 "summary":"",
 "kind":"paged",
 "export":false,
+"scope":"tn.jpm.segments:r",
 "query":[
 "page",
 "pageSize",
@@ -6155,6 +6341,7 @@
 "summary":"",
 "kind":"paged",
 "export":false,
+"scope":"tn.jpm.segments:r",
 "query":[
 "page",
 "pageSize",
@@ -6179,6 +6366,7 @@
 "summary":"",
 "kind":"paged",
 "export":false,
+"scope":"tn.jpm.segments:r",
 "query":[
 "page",
 "pageSize",
@@ -6201,6 +6389,7 @@
 "summary":"",
 "kind":"paged",
 "export":false,
+"scope":"tn.jpm.segments:r",
 "query":[
 "page",
 "pageSize",
@@ -6225,6 +6414,7 @@
 "summary":"",
 "kind":"paged",
 "export":false,
+"scope":"tn.jpm.segments:r",
 "query":[
 "page",
 "pageSize",
@@ -6249,6 +6439,7 @@
 "summary":"Returns attributed leads data.",
 "kind":"paged",
 "export":false,
+"scope":"tn.mads.attributedleads:r",
 "query":[
 "fromUtc",
 "toUtc",
@@ -6276,6 +6467,7 @@
 "summary":"Returns all capacity awareness warnings.",
 "kind":"paged",
 "export":false,
+"scope":"tn.mads.capacitywarnings:r",
 "query":[],
 "fields":[
 "businessUnits",
@@ -6293,6 +6485,7 @@
 "summary":"Returns performance data.",
 "kind":"paged",
 "export":false,
+"scope":"tn.mads.performance:r",
 "query":[
 "fromUtc",
 "toUtc",
@@ -6318,6 +6511,7 @@
 "summary":"",
 "kind":"object",
 "export":false,
+"scope":"tn.mrep.reviews:r",
 "query":[
 "page",
 "pageSize",
@@ -6361,6 +6555,7 @@
 "summary":"",
 "kind":"object",
 "export":false,
+"scope":"tn.mrk.campaigncostsummary:r",
 "query":[
 "from",
 "to"
@@ -6377,6 +6572,7 @@
 "summary":"Gets a paginated list of campaigns",
 "kind":"paged",
 "export":false,
+"scope":"tn.mrk.campaigns:r",
 "query":[
 "page",
 "pageSize",
@@ -6415,6 +6611,7 @@
 "summary":"Gets campaign specified by ID",
 "kind":"object",
 "export":false,
+"scope":"tn.mrk.campaigns:r",
 "query":[],
 "fields":[
 "active",
@@ -6440,6 +6637,7 @@
 "summary":"Gets a paginated list of campaign costs",
 "kind":"paged",
 "export":false,
+"scope":"tn.mrk.campaigns:r",
 "query":[
 "page",
 "pageSize",
@@ -6464,6 +6662,7 @@
 "summary":"Gets a paginated list of campaign categories",
 "kind":"paged",
 "export":false,
+"scope":"tn.mrk.categories:r",
 "query":[
 "page",
 "pageSize",
@@ -6491,6 +6690,7 @@
 "summary":"Gets campaign category specified by ID",
 "kind":"object",
 "export":false,
+"scope":"tn.mrk.categories:r",
 "query":[],
 "fields":[
 "active",
@@ -6509,6 +6709,7 @@
 "summary":"Gets a paginated list of campaign costs",
 "kind":"paged",
 "export":false,
+"scope":"tn.mrk.costs:r",
 "query":[
 "page",
 "pageSize",
@@ -6534,6 +6735,7 @@
 "summary":"Gets campaign cost specified by ID",
 "kind":"object",
 "export":false,
+"scope":"tn.mrk.costs:r",
 "query":[],
 "fields":[
 "campaignId",
@@ -6551,6 +6753,7 @@
 "summary":"",
 "kind":"object",
 "export":false,
+"scope":"tn.mrk.emailchannelcost:r",
 "query":[
 "from",
 "to"
@@ -6567,6 +6770,7 @@
 "summary":"Provides export feed for invoice templates",
 "kind":"paged",
 "export":true,
+"scope":"tn.mem.invoicetemplates:r",
 "query":[
 "from",
 "includeRecentChanges"
@@ -6592,6 +6796,7 @@
 "summary":"Provides export feed for customer membership status changes",
 "kind":"paged",
 "export":true,
+"scope":"tn.mem.memberships:r",
 "query":[
 "from",
 "includeRecentChanges"
@@ -6614,6 +6819,7 @@
 "summary":"Provides export feed for membership types",
 "kind":"paged",
 "export":true,
+"scope":"tn.mem.membershiptypes:r",
 "query":[
 "from",
 "includeRecentChanges"
@@ -6649,6 +6855,7 @@
 "summary":"Provides export feed for customer memberships",
 "kind":"paged",
 "export":true,
+"scope":"tn.mem.memberships:r",
 "query":[
 "from",
 "includeRecentChanges"
@@ -6701,6 +6908,7 @@
 "summary":"Provides export feed for recurring service events",
 "kind":"paged",
 "export":true,
+"scope":"tn.mem.recurringserviceevents:r",
 "query":[
 "from",
 "includeRecentChanges"
@@ -6728,6 +6936,7 @@
 "summary":"Provides export feed for recurring service types",
 "kind":"paged",
 "export":true,
+"scope":"tn.mem.recurringservicetypes:r",
 "query":[
 "from",
 "includeRecentChanges"
@@ -6761,6 +6970,7 @@
 "summary":"Provides export feed for recurring services",
 "kind":"paged",
 "export":true,
+"scope":"tn.mem.recurringservices:r",
 "query":[
 "from",
 "includeRecentChanges"
@@ -6812,6 +7022,7 @@
 "summary":"Gets a list of invoice templates by given IDs",
 "kind":"paged",
 "export":false,
+"scope":"tn.mem.invoicetemplates:r",
 "query":[
 "ids"
 ],
@@ -6836,6 +7047,7 @@
 "summary":"Gets invoice template specified by ID",
 "kind":"object",
 "export":false,
+"scope":"tn.mem.invoicetemplates:r",
 "query":[],
 "fields":[
 "active",
@@ -6858,6 +7070,7 @@
 "summary":"Gets a list of membership types",
 "kind":"paged",
 "export":false,
+"scope":"tn.mem.membershiptypes:r",
 "query":[
 "ids",
 "active",
@@ -6907,6 +7120,7 @@
 "summary":"Gets membership type specified by ID",
 "kind":"object",
 "export":false,
+"scope":"tn.mem.membershiptypes:r",
 "query":[],
 "fields":[
 "active",
@@ -6939,6 +7153,7 @@
 "summary":"Gets discounts for the given membership type",
 "kind":"array",
 "export":false,
+"scope":"tn.mem.membershiptypes:r",
 "query":[],
 "fields":[
 "createdById",
@@ -6956,6 +7171,7 @@
 "summary":"Gets duration/billing options for the given membership type",
 "kind":"array",
 "export":false,
+"scope":"tn.mem.membershiptypes:r",
 "query":[
 "active"
 ],
@@ -6980,6 +7196,7 @@
 "summary":"Gets recurring services for the given membership type",
 "kind":"array",
 "export":false,
+"scope":"tn.mem.membershiptypes:r",
 "query":[],
 "fields":[
 "allocation",
@@ -7001,6 +7218,7 @@
 "summary":"Gets a list of customer memberships",
 "kind":"paged",
 "export":false,
+"scope":"tn.mem.memberships:r",
 "query":[
 "ids",
 "customerIds",
@@ -7065,6 +7283,7 @@
 "summary":"Gets a list of custom field types that apply to customer memberships",
 "kind":"paged",
 "export":false,
+"scope":"tn.mem.memberships:r",
 "query":[
 "page",
 "pageSize",
@@ -7092,6 +7311,7 @@
 "summary":"Gets customer membership specified by ID",
 "kind":"object",
 "export":false,
+"scope":"tn.mem.memberships:r",
 "query":[],
 "fields":[
 "activatedById",
@@ -7141,6 +7361,7 @@
 "summary":"Gets status changes for the given customer membership",
 "kind":"array",
 "export":false,
+"scope":"tn.mem.memberships:r",
 "query":[],
 "fields":[
 "createdById",
@@ -7159,6 +7380,7 @@
 "summary":"Gets a list of recurring service events",
 "kind":"paged",
 "export":false,
+"scope":"tn.mem.recurringserviceevents:r",
 "query":[
 "ids",
 "locationId",
@@ -7195,6 +7417,7 @@
 "summary":"Gets a list of recurring service types",
 "kind":"paged",
 "export":false,
+"scope":"tn.mem.recurringservicetypes:r",
 "query":[
 "ids",
 "membershipTypeId",
@@ -7239,6 +7462,7 @@
 "summary":"Gets recurring service type specified by ID",
 "kind":"object",
 "export":false,
+"scope":"tn.mem.recurringservicetypes:r",
 "query":[],
 "fields":[
 "active",
@@ -7269,6 +7493,7 @@
 "summary":"Gets a list of recurring services",
 "kind":"paged",
 "export":false,
+"scope":"tn.mem.recurringservices:r",
 "query":[
 "ids",
 "membershipIds",
@@ -7331,6 +7556,7 @@
 "summary":"Gets recurring service specified by ID",
 "kind":"object",
 "export":false,
+"scope":"tn.mem.recurringservices:r",
 "query":[],
 "fields":[
 "activatedFromId",
@@ -7379,6 +7605,7 @@
 "summary":"Gets a list of payroll activity codes",
 "kind":"paged",
 "export":false,
+"scope":"tn.prl.activitycodes:r",
 "query":[
 "page",
 "pageSize",
@@ -7409,6 +7636,7 @@
 "summary":"Gets payroll activity code specified by ID",
 "kind":"object",
 "export":false,
+"scope":"tn.prl.activitycodes:r",
 "query":[],
 "fields":[
 "active",
@@ -7429,6 +7657,7 @@
 "summary":"Gets the employee payroll settings",
 "kind":"object",
 "export":false,
+"scope":"tn.prl.payrollsettings:r",
 "query":[],
 "fields":[
 "active",
@@ -7453,6 +7682,7 @@
 "summary":"Gets a list of employee payrolls",
 "kind":"paged",
 "export":false,
+"scope":"tn.prl.employees:r",
 "query":[
 "page",
 "pageSize",
@@ -7490,6 +7720,7 @@
 "summary":"Provides export feed for activity codes",
 "kind":"paged",
 "export":true,
+"scope":"tn.prl.activitycodes:r",
 "query":[
 "from",
 "includeRecentChanges"
@@ -7513,6 +7744,7 @@
 "summary":"Provides export feed for gross pay items",
 "kind":"paged",
 "export":true,
+"scope":"tn.prl.grosspayitems:r",
 "query":[
 "from",
 "includeRecentChanges"
@@ -7571,6 +7803,7 @@
 "summary":"Provides export feed for job splits",
 "kind":"paged",
 "export":true,
+"scope":"tn.prl.jobs:r",
 "query":[
 "from",
 "includeRecentChanges"
@@ -7593,6 +7826,7 @@
 "summary":"Provides export feed for job timesheets",
 "kind":"paged",
 "export":true,
+"scope":"tn.prl.jobs:r",
 "query":[
 "from",
 "includeRecentChanges"
@@ -7619,6 +7853,7 @@
 "summary":"Provides export feed for payroll adjustments",
 "kind":"paged",
 "export":true,
+"scope":"tn.prl.payrolladjustments:r",
 "query":[
 "from",
 "includeRecentChanges"
@@ -7650,6 +7885,7 @@
 "summary":"Provides export feed for payroll settings",
 "kind":"paged",
 "export":true,
+"scope":"tn.prl.payrollsettings:r",
 "query":[
 "from",
 "includeRecentChanges"
@@ -7677,6 +7913,7 @@
 "summary":"Provides export feed for timesheet codes",
 "kind":"paged",
 "export":true,
+"scope":"tn.prl.timesheetcodes:r",
 "query":[
 "from",
 "includeRecentChanges"
@@ -7701,6 +7938,7 @@
 "summary":"Gets a list of gross pay items",
 "kind":"paged",
 "export":false,
+"scope":"tn.prl.grosspayitems:r",
 "query":[
 "page",
 "pageSize",
@@ -7770,6 +8008,7 @@
 "summary":"Gets a list of job splits by multiple jobs",
 "kind":"paged",
 "export":false,
+"scope":"tn.prl.jobs:r",
 "query":[
 "jobIds",
 "page",
@@ -7799,6 +8038,7 @@
 "summary":"Gets a list of job timesheets by multiple jobs",
 "kind":"paged",
 "export":false,
+"scope":"tn.prl.jobs:r",
 "query":[
 "jobIds",
 "page",
@@ -7836,6 +8076,7 @@
 "summary":"Gets a list of job splits",
 "kind":"paged",
 "export":false,
+"scope":"tn.prl.jobs:r",
 "query":[
 "page",
 "pageSize",
@@ -7864,6 +8105,7 @@
 "summary":"Gets a list of job timesheets",
 "kind":"paged",
 "export":false,
+"scope":"tn.prl.jobs:r",
 "query":[
 "page",
 "pageSize",
@@ -7900,6 +8142,7 @@
 "summary":"Gets a list of payroll labor types",
 "kind":"paged",
 "export":false,
+"scope":"tn.prl.labortypes:r",
 "query":[
 "page",
 "pageSize",
@@ -7929,6 +8172,7 @@
 "summary":"Gets payroll labor type specified by ID",
 "kind":"object",
 "export":false,
+"scope":"tn.prl.labortypes:r",
 "query":[],
 "fields":[
 "active",
@@ -7948,6 +8192,7 @@
 "summary":"Gets a list of location hourly rates by multiple locations",
 "kind":"paged",
 "export":false,
+"scope":"tn.prl.locations:r",
 "query":[
 "locationIds",
 "createdBefore",
@@ -7975,6 +8220,7 @@
 "summary":"Gets a list of non job timesheets for employee",
 "kind":"paged",
 "export":false,
+"scope":"tn.prl.nonjobtimesheets:r",
 "query":[
 "page",
 "pageSize",
@@ -8008,6 +8254,7 @@
 "summary":"Gets a list of payroll adjustments",
 "kind":"paged",
 "export":false,
+"scope":"tn.prl.payrolladjustments:r",
 "query":[
 "page",
 "pageSize",
@@ -8049,6 +8296,7 @@
 "summary":"Gets payroll adjustment specified by ID",
 "kind":"object",
 "export":false,
+"scope":"tn.prl.payrolladjustments:r",
 "query":[
 "employeeType"
 ],
@@ -8079,6 +8327,7 @@
 "summary":"Gets the payroll settings list",
 "kind":"paged",
 "export":false,
+"scope":"tn.prl.payrollsettings:r",
 "query":[
 "employeeType",
 "page",
@@ -8113,6 +8362,7 @@
 "summary":"Gets a list of payrolls",
 "kind":"paged",
 "export":false,
+"scope":"tn.prl.payrolls:r",
 "query":[
 "employeeType",
 "page",
@@ -8151,6 +8401,7 @@
 "summary":"Gets the technician payroll settings",
 "kind":"object",
 "export":false,
+"scope":"tn.prl.payrollsettings:r",
 "query":[],
 "fields":[
 "active",
@@ -8175,6 +8426,7 @@
 "summary":"Gets a list of technician payrolls",
 "kind":"paged",
 "export":false,
+"scope":"tn.prl.technicians:r",
 "query":[
 "page",
 "pageSize",
@@ -8212,6 +8464,7 @@
 "summary":"Gets a list of timesheet codes",
 "kind":"paged",
 "export":false,
+"scope":"tn.prl.timesheetcodes:r",
 "query":[
 "createdBefore",
 "createdOnOrAfter",
@@ -8243,6 +8496,7 @@
 "summary":"Gets timesheet code specified by ID",
 "kind":"object",
 "export":false,
+"scope":"tn.prl.timesheetcodes:r",
 "query":[],
 "fields":[
 "active",
@@ -8264,6 +8518,7 @@
 "summary":"GET the categories in your pricebook",
 "kind":"paged",
 "export":false,
+"scope":"tn.pb.categories:r",
 "query":[
 "page",
 "pageSize",
@@ -8304,6 +8559,7 @@
 "summary":"Gets category details",
 "kind":"object",
 "export":false,
+"scope":"tn.pb.categories:r",
 "query":[],
 "fields":[
 "active",
@@ -8333,6 +8589,7 @@
 "summary":"",
 "kind":"paged",
 "export":false,
+"scope":"tn.pb.csp:r",
 "query":[
 "ids",
 "searchTerm",
@@ -8354,6 +8611,7 @@
 "summary":"Get data on all of the discounts or fees in the pricebook. Supports optional search filtering.",
 "kind":"paged",
 "export":false,
+"scope":"tn.pb.discountsandfees:r",
 "query":[
 "page",
 "pageSize",
@@ -8407,6 +8665,7 @@
 "summary":"Get details of a discount or fee in the pricebook.",
 "kind":"object",
 "export":false,
+"scope":"tn.pb.discountsandfees:r",
 "query":[
 "externalDataApplicationGuid"
 ],
@@ -8446,6 +8705,7 @@
 "summary":"Get data on all the equipment in the pricebook. Supports optional search filtering.",
 "kind":"paged",
 "export":false,
+"scope":"tn.pb.equipment:r",
 "query":[
 "page",
 "pageSize",
@@ -8523,6 +8783,7 @@
 "summary":"Get details of equipment in the pricebook.",
 "kind":"object",
 "export":false,
+"scope":"tn.pb.equipment:r",
 "query":[
 "externalDataApplicationGuid"
 ],
@@ -8586,6 +8847,7 @@
 "summary":"Provides export feed for categories",
 "kind":"paged",
 "export":true,
+"scope":"tn.pb.categories:r",
 "query":[
 "from",
 "includeRecentChanges"
@@ -8618,6 +8880,7 @@
 "summary":"Provides export feed for equipment",
 "kind":"paged",
 "export":true,
+"scope":"tn.pb.equipment:r",
 "query":[
 "from",
 "includeRecentChanges"
@@ -8682,6 +8945,7 @@
 "summary":"Provides export feed for materials",
 "kind":"paged",
 "export":true,
+"scope":"tn.pb.materials:r",
 "query":[
 "from",
 "includeRecentChanges"
@@ -8745,6 +9009,7 @@
 "summary":"Provides export feed for services",
 "kind":"paged",
 "export":true,
+"scope":"tn.pb.services:r",
 "query":[
 "from",
 "includeRecentChanges"
@@ -8797,6 +9062,7 @@
 "summary":"Downloads a specified pricebook image.",
 "kind":"unknown",
 "export":false,
+"scope":"tn.pb.images:r",
 "query":[
 "path"
 ],
@@ -8810,6 +9076,7 @@
 "summary":"Get details on materials in the pricebook. Supports optional search filtering.",
 "kind":"paged",
 "export":false,
+"scope":"tn.pb.materials:r",
 "query":[
 "isOtherDirectCost",
 "costTypeIds",
@@ -8888,6 +9155,7 @@
 "summary":"Get details on materials in the pricebook.",
 "kind":"paged",
 "export":false,
+"scope":"tn.pb.materials:r",
 "query":[],
 "fields":[
 "id",
@@ -8902,6 +9170,7 @@
 "summary":"Get details on a material in the pricebook.",
 "kind":"object",
 "export":false,
+"scope":"tn.pb.materials:r",
 "query":[
 "externalDataApplicationGuid"
 ],
@@ -8964,6 +9233,7 @@
 "summary":"Get materials markup collection",
 "kind":"paged",
 "export":false,
+"scope":"tn.pb.materials:r",
 "query":[
 "page",
 "pageSize"
@@ -8983,6 +9253,7 @@
 "summary":"Get materials markup item",
 "kind":"object",
 "export":false,
+"scope":"tn.pb.materials:r",
 "query":[],
 "fields":[
 "data"
@@ -8996,6 +9267,7 @@
 "summary":"Get data on all of the services in the pricebook. Supports optional search filtering.",
 "kind":"paged",
 "export":false,
+"scope":"tn.pb.services:r",
 "query":[
 "calculatePrices",
 "page",
@@ -9064,6 +9336,7 @@
 "summary":"Get details a service in the pricebook.",
 "kind":"object",
 "export":false,
+"scope":"tn.pb.services:r",
 "query":[
 "calculatePrices",
 "externalDataApplicationGuid"
@@ -9115,9 +9388,10 @@
 "title":"Reporting",
 "operation":"ReportDataQueries_Get",
 "path":"/reporting/v2/tenant/{tenant}/data-queries/{token}",
-"summary":"Poll the result of a long-running report data query. On Success, the gzipped JSON blob is streamed\ndirectly to the client (gzip pass-through when the client acc",
+"summary":"Poll the result of a long-running report data query. On Success, the gzipped JSON blob is streamed\ndirectly to the client (gzip pass-through when the client accepts gzip, decompress otherwise).",
 "kind":"paged",
 "export":false,
+"scope":"tn.rpr.reports:r",
 "query":[],
 "fields":[]
 },
@@ -9129,6 +9403,7 @@
 "summary":"List values of given dynamic set including key and display name",
 "kind":"paged",
 "export":false,
+"scope":"tn.rpr.dynamicvaluesets:r",
 "query":[
 "page",
 "pageSize",
@@ -9144,6 +9419,7 @@
 "summary":"List categories for existing  reports",
 "kind":"paged",
 "export":false,
+"scope":"tn.rpr.reportcategories:r",
 "query":[
 "page",
 "pageSize",
@@ -9162,6 +9438,7 @@
 "summary":"List reports within given category",
 "kind":"paged",
 "export":false,
+"scope":"tn.rpr.reports:r",
 "query":[
 "page",
 "pageSize",
@@ -9178,9 +9455,10 @@
 "title":"Reporting",
 "operation":"ReportCategoryReports_Get",
 "path":"/reporting/v2/tenant/{tenant}/report-category/{report_category}/reports/{reportId}",
-"summary":"Get report description including input parameters and output fields etc.\nTake a note that the report description isn't fixed and may be changed by the report ow",
+"summary":"Get report description including input parameters and output fields etc.\nTake a note that the report description isn't fixed and may be changed by the report owner.",
 "kind":"object",
 "export":false,
+"scope":"tn.rpr.reports:r",
 "query":[],
 "fields":[
 "description",
@@ -9199,6 +9477,7 @@
 "summary":"Gets a paginated list of estimate templates.",
 "kind":"paged",
 "export":false,
+"scope":"tn.sal.estimatetemplates:r",
 "query":[
 "active",
 "modifiedBefore",
@@ -9230,6 +9509,7 @@
 "summary":"Gets a single estimate template by ID.",
 "kind":"object",
 "export":false,
+"scope":"tn.sal.estimatetemplates:r",
 "query":[],
 "fields":[
 "active",
@@ -9254,6 +9534,7 @@
 "summary":"",
 "kind":"paged",
 "export":false,
+"scope":"tn.sal.estimates:r",
 "query":[
 "jobId",
 "projectId",
@@ -9319,6 +9600,7 @@
 "summary":"Provides export feed for estimates (legacy endpoint)",
 "kind":"paged",
 "export":false,
+"scope":"tn.sal.estimates:r",
 "query":[
 "from",
 "includeRecentChanges"
@@ -9363,6 +9645,7 @@
 "summary":"",
 "kind":"paged",
 "export":false,
+"scope":"tn.sal.estimates:r",
 "query":[
 "estimateId",
 "ids",
@@ -9408,6 +9691,7 @@
 "summary":"",
 "kind":"object",
 "export":false,
+"scope":"tn.sal.estimates:r",
 "query":[],
 "fields":[
 "active",
@@ -9449,6 +9733,7 @@
 "summary":"Provides export feed for estimates",
 "kind":"paged",
 "export":true,
+"scope":"tn.sal.estimates:r",
 "query":[
 "from",
 "includeRecentChanges"
@@ -9493,6 +9778,7 @@
 "summary":"Gets a list of proposal templates.",
 "kind":"paged",
 "export":false,
+"scope":"tn.sal.proposaltemplates:r",
 "query":[
 "active",
 "proposalTypeId",
@@ -9524,6 +9810,7 @@
 "summary":"Gets a single proposal template by ID.",
 "kind":"object",
 "export":false,
+"scope":"tn.sal.proposaltemplates:r",
 "query":[],
 "fields":[
 "active",
@@ -9547,6 +9834,7 @@
 "summary":"",
 "kind":"paged",
 "export":false,
+"scope":"tn.sal.proposaltypes:r",
 "query":[
 "active"
 ],
@@ -9568,6 +9856,7 @@
 "summary":"Get estimate status change details along with UTC timestamp.",
 "kind":"array",
 "export":false,
+"scope":"tn.sal.estimates:r",
 "query":[],
 "fields":[
 "createdById",
@@ -9585,6 +9874,7 @@
 "summary":"Provides performance data for router",
 "kind":"object",
 "export":false,
+"scope":"tn.sp.schedulers:r",
 "query":[
 "sessionCreatedOnOrAfter",
 "sessionCreatedBefore"
@@ -9604,6 +9894,7 @@
 "summary":"Gets a paginated list of sessions for router",
 "kind":"paged",
 "export":false,
+"scope":"tn.sp.schedulers:r",
 "query":[
 "createdBefore",
 "createdOnOrAfter",
@@ -9664,6 +9955,7 @@
 "summary":"Gets a list of schedulers",
 "kind":"paged",
 "export":false,
+"scope":"tn.sp.schedulers:r",
 "query":[
 "createdBefore",
 "createdOnOrAfter",
@@ -9695,6 +9987,7 @@
 "summary":"Provides performance data for scheduler",
 "kind":"object",
 "export":false,
+"scope":"tn.sp.schedulers:r",
 "query":[
 "sessionCreatedOnOrAfter",
 "sessionCreatedBefore"
@@ -9731,6 +10024,7 @@
 "summary":"Gets a paginated list of sessions for scheduler",
 "kind":"paged",
 "export":false,
+"scope":"tn.sp.schedulers:r",
 "query":[
 "createdBefore",
 "createdOnOrAfter",
@@ -9791,6 +10085,7 @@
 "summary":"Provides export feed for service agreements",
 "kind":"paged",
 "export":true,
+"scope":"tn.sa.serviceagreements:r",
 "query":[
 "from",
 "includeRecentChanges"
@@ -9847,6 +10142,7 @@
 "summary":"Gets a list of service agreements",
 "kind":"paged",
 "export":false,
+"scope":"tn.sa.serviceagreements:r",
 "query":[
 "ids",
 "customerIds",
@@ -9912,6 +10208,7 @@
 "summary":"Gets a list of custom field types for service agreements",
 "kind":"paged",
 "export":false,
+"scope":"tn.sa.serviceagreements:r",
 "query":[
 "page",
 "pageSize",
@@ -9939,6 +10236,7 @@
 "summary":"Gets service agreement specified by ID",
 "kind":"object",
 "export":false,
+"scope":"tn.sa.serviceagreements:r",
 "query":[],
 "fields":[
 "accountManagerId",
@@ -9991,6 +10289,7 @@
 "summary":"Gets a list of business units",
 "kind":"paged",
 "export":false,
+"scope":"tn.stt.businessunits:r",
 "query":[
 "ids",
 "name",
@@ -10043,6 +10342,7 @@
 "summary":"Retrieves a paginated list of Intacct business unit mappings based on the specified query parameters.",
 "kind":"paged",
 "export":false,
+"scope":"tn.stt.businessunits:r",
 "query":[
 "page",
 "pageSize",
@@ -10068,6 +10368,7 @@
 "summary":"Gets a business unit by ID",
 "kind":"object",
 "export":false,
+"scope":"tn.stt.businessunits:r",
 "query":[
 "externalDataApplicationGuid"
 ],
@@ -10109,6 +10410,7 @@
 "summary":"Gets a list of employees",
 "kind":"paged",
 "export":false,
+"scope":"tn.stt.employees:r",
 "query":[
 "ids",
 "userIds",
@@ -10160,6 +10462,7 @@
 "summary":"Gets a employee by ID",
 "kind":"object",
 "export":false,
+"scope":"tn.stt.employees:r",
 "query":[],
 "fields":[
 "aadUserId",
@@ -10198,6 +10501,7 @@
 "summary":"Provides export feed for business units",
 "kind":"paged",
 "export":true,
+"scope":"tn.stt.businessunits:r",
 "query":[
 "from",
 "includeRecentChanges"
@@ -10240,6 +10544,7 @@
 "summary":"Provides export feed for employees",
 "kind":"paged",
 "export":true,
+"scope":"tn.stt.employees:r",
 "query":[
 "from",
 "includeRecentChanges"
@@ -10281,6 +10586,7 @@
 "summary":"Provides export feed for tag types",
 "kind":"paged",
 "export":true,
+"scope":"tn.stt.tagtypes:r",
 "query":[
 "from",
 "includeRecentChanges"
@@ -10307,6 +10613,7 @@
 "summary":"Provides export feed for technicians",
 "kind":"paged",
 "export":true,
+"scope":"tn.stt.technicians:r",
 "query":[
 "from",
 "includeRecentChanges"
@@ -10368,6 +10675,7 @@
 "summary":"Gets a list of tag types",
 "kind":"paged",
 "export":false,
+"scope":"tn.stt.tagtypes:r",
 "query":[
 "page",
 "pageSize",
@@ -10401,6 +10709,7 @@
 "summary":"Gets a list of technicians",
 "kind":"paged",
 "export":false,
+"scope":"tn.stt.technicians:r",
 "query":[
 "ids",
 "userIds",
@@ -10471,6 +10780,7 @@
 "summary":"Gets a technician by ID",
 "kind":"object",
 "export":false,
+"scope":"tn.stt.technicians:r",
 "query":[],
 "fields":[
 "aadUserId",
@@ -10529,6 +10839,7 @@
 "summary":"Gets a list of user roles",
 "kind":"paged",
 "export":false,
+"scope":"tn.stt.userroles:r",
 "query":[
 "ids",
 "name",
@@ -10557,6 +10868,7 @@
 "summary":"",
 "kind":"object",
 "export":false,
+"scope":"tn.tsm.data:r",
 "query":[],
 "fields":[
 "businessUnits",
@@ -10577,6 +10889,7 @@
 "summary":"Get a list of tasks",
 "kind":"paged",
 "export":false,
+"scope":"tn.tsm.tasks:r",
 "query":[
 "page",
 "pageSize",
@@ -10654,6 +10967,7 @@
 "summary":"Get a Task by Id",
 "kind":"object",
 "export":false,
+"scope":"tn.tsm.tasks:r",
 "query":[
 "includeSubtasks"
 ],
@@ -10699,6 +11013,7 @@
 "summary":"Get filtered calls.",
 "kind":"paged",
 "export":false,
+"scope":"tn.tlc.calls:r",
 "query":[
 "modifiedBefore",
 "modifiedOnOrAfter",
@@ -10737,6 +11052,7 @@
 "summary":"Get call's details.",
 "kind":"object",
 "export":false,
+"scope":"tn.tlc.calls:r",
 "query":[],
 "fields":[
 "businessUnit",
@@ -10755,6 +11071,7 @@
 "summary":"Get recording of the call.",
 "kind":"unknown",
 "export":false,
+"scope":"tn.tlc.calls:r",
 "query":[],
 "fields":[]
 },
@@ -10766,6 +11083,7 @@
 "summary":"Get voicemail of the call.",
 "kind":"unknown",
 "export":false,
+"scope":"tn.tlc.calls:r",
 "query":[],
 "fields":[]
 },
@@ -10777,6 +11095,7 @@
 "summary":"Provides export feed for telecom calls",
 "kind":"paged",
 "export":true,
+"scope":"tn.tlc.calls:r",
 "query":[
 "from",
 "includeRecentChanges"
@@ -10814,6 +11133,7 @@
 "summary":"Provides a feed for telecom calls",
 "kind":"paged",
 "export":false,
+"scope":"tn.tlc.calls:r",
 "query":[
 "page",
 "pageSize",
@@ -10855,6 +11175,7 @@
 "summary":"Returns all opt-outs for the tenant",
 "kind":"paged",
 "export":false,
+"scope":"tn.tlc.optinout:r",
 "query":[],
 "fields":[
 "contactNumber",
@@ -10869,6 +11190,7 @@
 "summary":"Gets a list of activities",
 "kind":"paged",
 "export":false,
+"scope":"tn.tms.activities:r",
 "query":[
 "page",
 "pageSize",
@@ -10914,6 +11236,7 @@
 "summary":"Gets activity specified by ID",
 "kind":"object",
 "export":false,
+"scope":"tn.tms.activities:r",
 "query":[],
 "fields":[
 "active",
@@ -10947,6 +11270,7 @@
 "summary":"Gets a list of activity categories",
 "kind":"paged",
 "export":false,
+"scope":"tn.tms.activitycategories:r",
 "query":[
 "page",
 "pageSize",
@@ -10977,6 +11301,7 @@
 "summary":"Gets activity category specified by ID",
 "kind":"object",
 "export":false,
+"scope":"tn.tms.activitycategories:r",
 "query":[],
 "fields":[
 "active",
@@ -10997,6 +11322,7 @@
 "summary":"Gets a list of activity types",
 "kind":"paged",
 "export":false,
+"scope":"tn.tms.activitytypes:r",
 "query":[
 "page",
 "pageSize",
@@ -11047,6 +11373,7 @@
 "summary":"Gets activity types specified by ID",
 "kind":"object",
 "export":false,
+"scope":"tn.tms.activitytypes:r",
 "query":[],
 "fields":[
 "active",
@@ -11088,6 +11415,7 @@
 "summary":"Provides export feed for activity.",
 "kind":"paged",
 "export":true,
+"scope":"tn.tms.activities:r",
 "query":[
 "from",
 "includeRecentChanges"
@@ -11124,6 +11452,7 @@
 "summary":"Provides export feed for activity categories.",
 "kind":"paged",
 "export":true,
+"scope":"tn.tms.activitycategories:r",
 "query":[
 "from",
 "includeRecentChanges"
@@ -11147,6 +11476,7 @@
 "summary":"Provides export feed for activity types.",
 "kind":"paged",
 "export":true,
+"scope":"tn.tms.activitytypes:r",
 "query":[
 "from",
 "includeRecentChanges"

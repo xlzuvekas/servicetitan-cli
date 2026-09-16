@@ -5,7 +5,8 @@ The developer portal (https://developer.servicetitan.io) serves its API list at
 /api/docs/apis and each API's OpenAPI 3.1 document at /api/docs/apis/<api-id>.
 Only GET operations are kept: this CLI never writes to ServiceTitan.
 
-    python scripts/build_endpoint_catalogue.py
+    python scripts/build_endpoint_catalogue.py                 # download from the portal
+    python scripts/build_endpoint_catalogue.py --specs-dir DIR # reuse downloaded specs (tenant-*.json + apis.json)
 """
 import json
 import os
@@ -26,6 +27,15 @@ def deref(spec, ref):
     for part in ref.lstrip("#/").split("/"):
         node = node[part]
     return node
+
+
+def oauth_scope(op):
+    """The OAuth scope an operation requires (every ServiceTitan op declares exactly one)."""
+    for req in op.get("security") or []:
+        for scheme, scopes in req.items():
+            if scheme.lower().startswith("oauth") and scopes:
+                return scopes[0]
+    return None
 
 
 def response_shape(spec, op):
@@ -49,12 +59,26 @@ def response_shape(spec, op):
     return "object", sorted(props.keys())
 
 
+def load_spec(api_id, specs_dir):
+    if specs_dir:
+        with open(os.path.join(specs_dir, api_id + ".json"), encoding="utf-8") as f:
+            return json.load(f)
+    return fetch_json("%s/api/docs/apis/%s" % (PORTAL, api_id))
+
+
 def main():
-    groups = fetch_json(PORTAL + "/api/docs/apis")
+    specs_dir = None
+    if "--specs-dir" in sys.argv:
+        specs_dir = sys.argv[sys.argv.index("--specs-dir") + 1]
+    if specs_dir:
+        with open(os.path.join(specs_dir, "apis.json"), encoding="utf-8") as f:
+            groups = json.load(f)
+    else:
+        groups = fetch_json(PORTAL + "/api/docs/apis")
     apis = [a for g in groups for a in g["apis"]]
     endpoints = []
     for api in apis:
-        spec = fetch_json("%s/api/docs/apis/%s" % (PORTAL, api["id"]))
+        spec = load_spec(api["id"], specs_dir)
         prod = [s["url"] for s in spec.get("servers", []) if s["url"].startswith("https://api.servicetitan.io")]
         prefix = prod[0].replace("https://api.servicetitan.io", "") if prod else ""
         for path, ops in spec.get("paths", {}).items():
@@ -76,6 +100,7 @@ def main():
                 "summary": (op.get("summary") or (op.get("description") or "")[:160]),
                 "kind": kind,
                 "export": "/export/" in path,
+                "scope": oauth_scope(op),
                 "query": query,
                 "fields": fields[:60],
             })

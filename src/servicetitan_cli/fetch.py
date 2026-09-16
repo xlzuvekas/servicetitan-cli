@@ -49,6 +49,24 @@ from .output import progress as _progress
 
 PO_CLOSED_STATUSES = {"Received", "Canceled", "Cancelled"}
 
+# ServiceTitan's `active` filter defaults to active records only. Rosters and
+# reference data must include inactive rows: completed jobs still reference
+# technicians who have since left, and old invoices reference retired units.
+ANY = {"active": "Any"}
+
+# Every endpoint the snapshot pull touches, in the catalogue's path form, so
+# `auth check` can compare the scopes a token was granted with what fetch needs.
+FETCH_ENDPOINTS = (
+    "/settings/v2/tenant/{tenant}/business-units", "/settings/v2/tenant/{tenant}/technicians",
+    "/settings/v2/tenant/{tenant}/employees", "/jpm/v2/tenant/{tenant}/job-types",
+    "/jpm/v2/tenant/{tenant}/jobs", "/jpm/v2/tenant/{tenant}/appointments",
+    "/dispatch/v2/tenant/{tenant}/appointment-assignments", "/sales/v2/tenant/{tenant}/estimates",
+    "/crm/v2/tenant/{tenant}/customers", "/memberships/v2/tenant/{tenant}/memberships",
+    "/memberships/v2/tenant/{tenant}/membership-types", "/accounting/v2/tenant/{tenant}/invoices",
+    "/inventory/v2/tenant/{tenant}/purchase-orders", "/inventory/v2/tenant/{tenant}/vendors",
+    "/marketing/v2/tenant/{tenant}/campaigns", "/telecom/v2/tenant/{tenant}/calls",
+)
+
 
 def num(v):
     """ServiceTitan returns money as a float or a decimal string."""
@@ -89,21 +107,21 @@ def pull_tenant(client, cfg, tenant, op_start, ar_start, max_pages=100, log=None
 
     out = {}
     log("[%s] business units, technicians, employees..." % code)
-    bus = pages("settings/v2/business-units", {}, "business-units")
+    bus = pages("settings/v2/business-units", ANY, "business-units")
     bu_dept = {b["id"]: dept_for_business_unit(b.get("name"), mapping) for b in bus}
     bu_name = {b["id"]: b.get("name") for b in bus}
     out["businessUnits"] = [{"id": key(b["id"]), "loc": code, "name": b.get("name"), "dept": bu_dept[b["id"]],
                              "active": b.get("active")} for b in bus]
 
-    techs = pages("settings/v2/technicians", {}, "technicians")
+    techs = pages("settings/v2/technicians", ANY, "technicians")
     out["technicians"] = [{"id": key(x["id"]), "name": x.get("name"), "loc": code,
                            "dept": bu_dept.get(x.get("businessUnitId")), "active": x.get("active")} for x in techs]
-    employees = pages("settings/v2/employees", {}, "employees")
+    employees = pages("settings/v2/employees", ANY, "employees")
     people = {key(x["id"]): x.get("name") for x in techs}
     people.update({key(x["id"]): x.get("name") for x in employees})
 
     try:
-        job_types = pages("jpm/v2/job-types", {}, "job-types")
+        job_types = pages("jpm/v2/job-types", ANY, "job-types")
     except ApiError as e:
         warnings.append("job types not readable (%s); jobType will be empty" % e.message)
         job_types = []
@@ -148,13 +166,13 @@ def pull_tenant(client, cfg, tenant, op_start, ar_start, max_pages=100, log=None
                     sum(num(i.get("total")) for i in (e.get("items") or []))
 
     log("[%s] customers..." % code)
-    customers = pages("crm/v2/customers", {}, "customers")
+    customers = pages("crm/v2/customers", ANY, "customers")
     cust_name = {c["id"]: c.get("name") for c in customers}
     cust_city = {c["id"]: (c.get("address") or {}).get("city") for c in customers}
 
     log("[%s] memberships..." % code)
-    memberships = pages("memberships/v2/memberships", {}, "memberships")
-    mtypes = pages("memberships/v2/membership-types", {}, "membership-types")
+    memberships = pages("memberships/v2/memberships", ANY, "memberships")
+    mtypes = pages("memberships/v2/membership-types", ANY, "membership-types")
     mtype_name = {m["id"]: m.get("name") for m in mtypes}
     membership_customer_days = {(m["customerId"], (m.get("createdOn") or "")[:10])
                                 for m in memberships if m.get("customerId")}
@@ -263,7 +281,7 @@ def pull_tenant(client, cfg, tenant, op_start, ar_start, max_pages=100, log=None
             % (code, len(unbilled), "{:,.0f}".format(unbilled_total)))
 
     pos = pages("inventory/v2/purchase-orders", {}, "purchase-orders")
-    vendors = pages("inventory/v2/vendors", {}, "vendors")
+    vendors = pages("inventory/v2/vendors", ANY, "vendors")
     vendor_name = {v["id"]: v.get("name") for v in vendors}
     open_pos = [p for p in pos if p.get("status") not in PO_CLOSED_STATUSES]
     out["purchaseOrders"] = [{
@@ -274,7 +292,7 @@ def pull_tenant(client, cfg, tenant, op_start, ar_start, max_pages=100, log=None
     out["poTotals"] = {code: len(pos)}
 
     log("[%s] campaigns and calls..." % code)
-    campaigns = pages("marketing/v2/campaigns", {}, "campaigns")
+    campaigns = pages("marketing/v2/campaigns", ANY, "campaigns")
     out["campaigns"] = [{"id": key(c["id"]), "loc": code, "name": (c.get("name") or "").strip(),
                          "category": (c.get("category") or {}).get("name"), "active": c.get("active")} for c in campaigns]
     calls = pages("telecom/v2/calls", {"createdOnOrAfter": op_start}, "calls")

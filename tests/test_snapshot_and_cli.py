@@ -38,8 +38,15 @@ def test_endpoint_catalogue():
     assert any(e["path"] == "/jpm/v2/tenant/{tenant}/jobs" for e in jobs)
     assert all(e["export"] for e in endpoints.search(exports_only=True))
     e = endpoints.describe("/jpm/v2/tenant/{tenant}/jobs")
-    assert e and "jobStatus" in e["query"] and "total" in e["fields"]
+    assert e and "jobStatus" in e["query"] and "total" in e["fields"] and e["scope"] == "tn.jpm.jobs:r"
     assert any(m["module"] == "telecom" for m in endpoints.modules())
+    from servicetitan_cli.fetch import FETCH_ENDPOINTS
+    needed = endpoints.scopes_for(FETCH_ENDPOINTS)
+    assert all(needed.values()), "every fetch endpoint must be in the catalogue with a scope: %s" % needed
+    assert all(s.endswith(":r") for s in needed.values())
+    granted = [s for s in needed.values() if s != "tn.tlc.calls:r"]
+    assert endpoints.missing_scopes(granted, FETCH_ENDPOINTS) == ["tn.tlc.calls:r"]
+    assert endpoints.missing_scopes(None, FETCH_ENDPOINTS) == []
 
 
 def test_cli_offline_flow(capsys, isolated_home, demo_path):

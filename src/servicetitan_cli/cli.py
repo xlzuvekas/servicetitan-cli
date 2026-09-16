@@ -583,7 +583,8 @@ def cmd_tenant(ctx, args):
 
 def cmd_auth(ctx, args):
     from .api import ServiceTitanClient
-    from .fetch import dept_for_business_unit
+    from .endpoints import missing_scopes
+    from .fetch import FETCH_ENDPOINTS, dept_for_business_unit
     if args.auth_cmd != "check":
         raise UsageError("auth needs an action", hint="check")
     mapping = ctx.config["departmentMapping"]
@@ -600,6 +601,13 @@ def cmd_auth(ctx, args):
             for u in rep["businessUnits"]:
                 buckets.setdefault(dept_for_business_unit(u.get("name"), mapping) or "EXCLUDED", []).append(u.get("name"))
             entry.update({"ok": True, "businessUnits": len(rep["businessUnits"]), "classification": buckets})
+            if rep.get("grantedScopes") is not None:
+                missing = missing_scopes(rep["grantedScopes"], FETCH_ENDPOINTS)
+                entry["scopes"] = {"granted": len(rep["grantedScopes"]), "missingForFetch": missing}
+                if missing:
+                    entry["scopeHint"] = ("`servicetitan fetch` will get 403s on the endpoints needing these scopes. "
+                                          "Add the read scopes in the developer portal, then re-approve the app in "
+                                          "ServiceTitan (Settings > Integrations > API Application Access).")
             if "Other" in buckets:
                 entry["note"] = ("'Other' units count toward company totals but appear on no department tab; add a "
                                  "keyword to departmentMapping if that is wrong.")

@@ -31,7 +31,8 @@ class FakeSession(object):
 
     def post(self, url, timeout=None, data=None):
         self.calls.append(("POST", url, data))
-        return FakeResponse(200, {"access_token": "tok-%d" % len(self.calls), "expires_in": 900})
+        return FakeResponse(200, {"access_token": "tok-%d" % len(self.calls), "expires_in": 900, "token_type": "Bearer",
+                                  "scope": "tn.stt.businessunits:r tn.jpm.jobs:r"})
 
     def get(self, url, headers=None, params=None, timeout=None):
         self.calls.append(("GET", url, params, headers))
@@ -72,7 +73,9 @@ def test_resolve_url_forms():
 
 def test_only_the_token_endpoint_is_posted():
     c, sess = client({"business-units": FakeResponse(200, {"data": [{"id": 1, "name": "Service"}], "hasMore": False})})
-    c.check()
+    rep = c.check()
+    assert rep["grantedScopes"] == ["tn.jpm.jobs:r", "tn.stt.businessunits:r"]
+    assert [x for x in sess.calls if x[0] == "GET"][0][2]["active"] == "Any"
     posts = [x for x in sess.calls if x[0] == "POST"]
     assert posts and all(x[1] == c.auth_url for x in posts)
     assert not [n for n in dir(ServiceTitanClient) if n in ("post", "put", "patch", "delete")]
@@ -151,3 +154,13 @@ def test_bad_credentials_is_auth_error():
     with pytest.raises(AuthError) as ei:
         c.token()
     assert ei.value.exit_code == 4
+
+
+def test_problem_details_are_surfaced():
+    body = {"type": "https://tools.ietf.org/html/rfc9110#section-15.5.1", "title": "One or more validation errors occurred.",
+            "status": 400, "traceId": "00-abc", "errors": {"pageSize": ["The value 'x' is not valid."]}}
+    c, _ = client({"jobs": FakeResponse(400, body)})
+    with pytest.raises(ApiError) as ei:
+        c.get("jpm/v2/jobs")
+    assert ei.value.details["problem"]["errors"]["pageSize"] and "validation" in ei.value.message
+    assert ServiceTitanClient.problem_details("not json") is None

@@ -108,6 +108,7 @@ class ServiceTitanClient(object):
         self.max_retries = max_retries
         self.progress = progress or (lambda msg: None)
         self._token = None
+        self.granted_scopes = None   # set from the token response ("scope": "tn.jpm.jobs:r tn.acc.invoices:r ...")
         self._recent = []
         self.requests_made = 0
         self.last_truncated = False
@@ -148,6 +149,8 @@ class ServiceTitanClient(object):
         if not tok:
             raise AuthError("Token response had no access_token", details={"body": r.text[:300]})
         self._token = tok
+        if isinstance(body.get("scope"), str):
+            self.granted_scopes = sorted(set(body["scope"].split()))
         self.token_cache.put(self._cache_key, tok, body.get("expires_in"))
         return tok
 
@@ -239,9 +242,26 @@ class ServiceTitanClient(object):
                     return r.text
             self._raise_for(r, url)
 
+    @staticmethod
+    def problem_details(text):
+        """ServiceTitan errors are RFC 7807 problem-details objects: type, title, status, traceId, errors, data."""
+        try:
+            body = json.loads(text)
+        except (TypeError, ValueError):
+            return None
+        if not isinstance(body, dict) or not ("title" in body or "errors" in body):
+            return None
+        out = {k: body[k] for k in ("title", "status", "traceId") if body.get(k) is not None}
+        if body.get("errors"):
+            out["errors"] = body["errors"]
+        if body.get("detail"):
+            out["detail"] = body["detail"]
+        return out
+
     def _raise_for(self, r, url):
         code = r.status_code
         body = r.text
+        problem = self.problem_details(body)
         if code == 401:
             raise AuthError("ServiceTitan rejected the request for tenant %s (401)" % self.creds.code,
                             hint="The app key is wrong, or this app is not connected to tenant %s in ServiceTitan "
@@ -249,16 +269,22 @@ class ServiceTitanClient(object):
                             details={"status": code, "url": url, "body": body[:300]})
         if code == 403:
             raise ApiError("Forbidden (403) for %s" % url, status=code, body=body, url=url,
-                           hint="The app lacks the API scope for this endpoint. Add the read scope in the developer "
-                                "portal, then re-approve the app inside ServiceTitan.")
+                           hint="The app lacks the API scope for this endpoint (`servicetitan api endpoints --search ...` "
+                                "shows the scope). Add the read scope in the developer portal, then re-approve the app "
+                                "inside ServiceTitan.", details={"problem": problem} if problem else None)
         if code == 404:
             raise ApiError("Not found (404) for %s" % url, status=code, body=body, url=url,
                            hint="Check the path (`servicetitan api endpoints --search ...`) and that the tenant id "
-                                "belongs to these credentials.")
+                                "belongs to these credentials.", details={"problem": problem} if problem else None)
         if code == 429:
             raise ApiError("Rate limited (429) and retries exhausted", status=code, body=body, url=url,
                            hint="ServiceTitan allows 600 calls per 10 seconds per app per tenant. Slow down or retry later.")
-        raise ApiError("HTTP %s for %s" % (code, url), status=code, body=body, url=url)
+        if code == 400 and problem:
+            raise ApiError("Bad request (400): %s" % problem.get("title", ""), status=code, body=body, url=url,
+                           hint="ServiceTitan rejected a parameter; see details.problem.errors for the field and message.",
+                           details={"problem": problem})
+        raise ApiError("HTTP %s for %s" % (code, url), status=code, body=body, url=url,
+                       details={"problem": problem} if problem else None)
 
     def get_pages(self, path, params=None, max_pages=None, page_size=None):
         """Yield (page_number, items, body) for a paged list endpoint until hasMore is false."""
@@ -311,7 +337,7 @@ class ServiceTitanClient(object):
     def check(self):
         """Authenticate and read business units. Returns a small report dict."""
         self.token(force=True)
-        body = self.get("settings/v2/business-units", {"pageSize": 200, "page": 1})
+        body = self.get("settings/v2/business-units", {"pageSize": 200, "page": 1, "active": "Any"})
         units = (body or {}).get("data") or []
-        return {"authenticated": True, "businessUnits": [{"id": u.get("id"), "name": u.get("name"),
-                                                            "active": u.get("active")} for u in units]}
+        return {"authenticated": True, "grantedScopes": self.granted_scopes,
+                "businessUnits": [{"id": u.get("id"), "name": u.get("name"), "active": u.get("active")} for u in units]}

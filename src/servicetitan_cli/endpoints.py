@@ -33,7 +33,7 @@ def search(text=None, module=None, exports_only=False, include_fields=False, lim
         hay = " ".join([e["path"], e.get("operation") or "", e.get("summary") or "", " ".join(e.get("query") or [])]).lower()
         if text and not all(tok in hay for tok in text.split()):
             continue
-        item = {k: e[k] for k in ("module", "path", "operation", "summary", "kind", "export", "query")}
+        item = {k: e.get(k) for k in ("module", "path", "operation", "summary", "kind", "export", "scope", "query")}
         if include_fields:
             item["fields"] = e.get("fields") or []
         out.append(item)
@@ -48,3 +48,22 @@ def describe(path_or_operation):
         if e["path"].lower() == key or (e.get("operation") or "").lower() == key or e["path"].lower().replace("/tenant/{tenant}", "") == key:
             return e
     return None
+
+
+def scopes_for(paths):
+    """{path: scope} for catalogue paths (missing paths map to None)."""
+    by = {e["path"]: e.get("scope") for e in catalogue()["endpoints"]}
+    return {p: by.get(p) for p in paths}
+
+
+def missing_scopes(granted, paths):
+    """Scopes needed by ``paths`` that a token's granted scope list lacks.
+
+    ServiceTitan grants read (``:r``) and write (``:w``) scopes separately; a
+    write scope does not imply read. Returns [] when ``granted`` is unknown.
+    """
+    if granted is None:
+        return []
+    have = set(granted)
+    need = scopes_for(paths)
+    return sorted({scope for scope in need.values() if scope and scope not in have})
