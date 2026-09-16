@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "servicetitan-cli"
 version = "0.1.0"
-description = "Read-only ServiceTitan command-line tool built for AI agents: multi-tenant credentials stored in the OS keychain, JSON everywhere, derived operations metrics, and a GET passthrough to every ServiceTitan API."
+description = "ServiceTitan command-line tool built for AI agents: multi-tenant credentials stored in the OS keychain, JSON everywhere, derived operations metrics, and every ServiceTitan API operation as a command (reads by default, writes behind explicit gates)."
 readme = "README.md"
 requires-python = ">=3.9"
 license = { text = "MIT" }

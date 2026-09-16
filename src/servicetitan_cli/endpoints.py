@@ -2,8 +2,9 @@
 
 Generated from ServiceTitan's OpenAPI documents by
 ``scripts/build_endpoint_catalogue.py`` into ``data/endpoints.json``. Every
-operation is listed so an agent can discover the whole API step by step; only
-GET operations execute, because this tool is read-only.
+operation is listed so an agent can discover the whole API step by step. Reads
+execute directly; writes execute only through the gates in ``apitree``
+(``--write``, the profile's write allowlist, the token's ``:w`` scope).
 """
 import difflib
 import json
@@ -136,7 +137,7 @@ def operations(module, resource):
     for name in sorted(ops, key=lambda n: (ops[n]["method"] != "GET", n)):
         o = ops[name]
         item = {"operation": name, "method": o["method"], "path": o["path"], "summary": o.get("summary"),
-                "scope": o.get("scope"), "kind": o.get("kind"), "executable": o["method"] == "GET",
+                "scope": o.get("scope"), "kind": o.get("kind"), "executable": True, "write": o["method"] != "GET",
                 "pathParams": [p["name"] for p in o.get("params", []) if p["in"] == "path"]}
         if o.get("version"):
             item["version"] = o["version"]
@@ -151,6 +152,9 @@ def resolve_operation(module, resource, token):
     key = (token or "").lower().strip().replace("_", "-")
     if key in ops:
         return ops[key]
+    for name, op in ops.items():          # names are lowercase by construction; tolerate a hand-edited catalogue
+        if name.lower() == key:
+            return op
     raise UsageError("Resource %r has no operation %r" % (resource, token),
                      hint="%sOperations: %s" % (_suggest(key, sorted(ops)), ", ".join(sorted(ops))))
 
@@ -165,12 +169,16 @@ def describe(op):
     out = {"module": op["module"], "resource": op["resource"], "operation": op["operation"], "method": op["method"],
            "path": op["path"], "operationId": op.get("operationId"), "summary": op.get("summary"),
            "description": op.get("description"), "scope": op.get("scope"), "kind": op.get("kind"),
-           "export": op.get("export", False), "executable": op["method"] == "GET",
+           "export": op.get("export", False), "executable": True, "write": op["method"] != "GET",
            "pathParams": [p for p in op.get("params", []) if p["in"] == "path"],
            "queryParams": [p for p in op.get("params", []) if p["in"] == "query"],
            "responseFields": op.get("fields") or [], "example": example}
     if op.get("body"):
         out["requestBody"] = op["body"]
+    if op["method"] != "GET":
+        out["requires"] = ["--write on the invocation", "profile write allowlist match (servicetitan profile set <profile> --allow-writes ...)",
+                           "token scope %s" % (op.get("scope") or "?")]
+        out["example"] += " --write --dry-run" + (" --body '{...}'" if op.get("body") else "")
     if op.get("version"):
         out["version"] = op["version"]
     if op.get("deprecated"):

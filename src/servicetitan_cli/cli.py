@@ -81,7 +81,8 @@ def _range_args(p, default="mtd", allow_all=False):
 def build_parser():
     root = argparse.ArgumentParser(
         prog="servicetitan",
-        description="Read-only ServiceTitan CLI built for AI agents. JSON in, JSON out, GET only.",
+        description="ServiceTitan CLI built for AI agents. JSON in, JSON out. Reads by default; a write runs only "
+                    "with --write, a profile allowlist match and the operation's :w scope.",
         epilog=EXAMPLES, formatter_class=argparse.RawDescriptionHelpFormatter)
     root.add_argument("--version", action="version", version="servicetitan-cli %s" % __version__)
     _common(root)
@@ -117,6 +118,10 @@ def build_parser():
     x.add_argument("--department-mapping", help='JSON, e.g. \'{"Install": ["install"], "Service": ["service"], "exclude": ["warehouse"]}\'')
     x.add_argument("--window", help='JSON, e.g. \'{"operationalStart": "2026-01-01", "arMonthsBack": 20}\'')
     x.add_argument("--person-aliases", help='JSON map of "CODE:userId" -> canonical name')
+    x.add_argument("--allow-writes", metavar="PATTERNS",
+                   help="comma-separated write allowlist: module, module/resource, module/resource/operation or * "
+                        "(replaces the list), e.g. \"jpm/jobs/create-notes,crm/customers\"")
+    x.add_argument("--no-writes", action="store_true", help="clear the write allowlist (the default state)")
     x = _sub(ps, "import", "create a profile from the dashboard template's config.json + .env "
                             "(paths via the global --config / --env-file; default ./config.json and ./.env)")
     x.add_argument("name")
@@ -264,9 +269,11 @@ def build_parser():
                          "  servicetitan api jpm jobs list --job-status Completed --completed-on-or-after 2026-09-01T00:00:00Z --all\n"
                          "  servicetitan api jpm jobs get 12345\n"
                          "  servicetitan api jpm jobs list --describe   the contract as JSON (no credentials needed)\n\n"
-                         "Built-ins: `api get <path>` for a raw path, `api endpoints --search WORDS`, `api modules`.\n"
-                         "GET operations run live for one tenant (--tenant CODE when the profile has several); write\n"
-                         "operations are listed for discovery but never executed: this tool is read-only.")
+                         "Built-ins: `api get <path>` for a raw path, `api endpoints --search WORDS`, `api modules`,\n"
+                         "`api catalogue status|refresh|reset`, `api audit`.\n"
+                         "Reads run live for one tenant (--tenant CODE when the profile has several). Writes run only\n"
+                         "with --write, when the profile allows the operation (`profile set NAME --allow-writes ...`)\n"
+                         "and the token carries its :w scope; --dry-run previews and audit.jsonl records every attempt.")
     x.add_argument("rest", nargs=argparse.REMAINDER, metavar="<module> <resource> <operation> ...")
 
     # ---- misc
@@ -441,6 +448,11 @@ def cmd_profile(ctx, args):
                 if not isinstance(val, dict):
                     raise UsageError("--%s must be a JSON object" % argname.replace("_", "-"))
                 settings[key] = val
+        if args.no_writes:
+            settings["writes"] = {"allow": []}
+        elif args.allow_writes is not None:
+            from .writes import parse_patterns
+            settings["writes"] = {"allow": parse_patterns(args.allow_writes)}
         if not settings:
             raise UsageError("Nothing to change", hint="See `servicetitan profile set --help`.")
         prof = store.update_settings(name, settings)
@@ -808,6 +820,9 @@ def _api_builtin_parser(name):
         p.add_argument("--limit", type=int, default=50)
     elif name == "modules":
         p.description = "List API modules with operation counts and API versions."
+    elif name == "audit":
+        p.description = "Recent write attempts (dry runs, successes and failures) from the audit log."
+        p.add_argument("--limit", type=int, default=50)
     elif name == "catalogue":
         p.description = ("The operation catalogue is built from ServiceTitan's OpenAPI documents. The package ships one; "
                          "`refresh` downloads the current documents from the developer portal into the config directory "
@@ -830,7 +845,7 @@ def cmd_api(ctx, args):
             return None
         return data
     head = rest[0]
-    if head in ("get", "endpoints", "modules", "catalogue"):
+    if head in ("get", "endpoints", "modules", "catalogue", "audit"):
         sub = _api_builtin_parser(head).parse_args(rest[1:])
         for k, v in vars(sub).items():
             if k not in vars(args) or v not in (None, False):
@@ -838,6 +853,15 @@ def cmd_api(ctx, args):
         if head == "modules":
             return {"source": "catalogue", "catalogue": {k: v for k, v in ep.info().items() if k != "modules"},
                     "modules": ep.modules()}
+        if head == "audit":
+            from . import writes
+            prof = None
+            try:
+                prof = ctx.profile_name
+            except ConfigError:
+                pass
+            rows = writes.read(limit=sub.limit, profile=prof)
+            return {"source": "audit", "path": writes.audit_path(), "profile": prof, "count": len(rows), "entries": rows}
         if head == "catalogue":
             from . import catalogue as cat
             if sub.action == "status":
@@ -920,6 +944,8 @@ def cmd_api(ctx, args):
             return None
         return data
     op = ep.resolve_operation(module, resource, rest[2])
+    if "--describe" in rest[3:]:      # the contract needs no path parameters, credentials or tenant
+        return ep.describe(op)
     parser = apitree.build_parser(op, add_common=_common)
     ns = parser.parse_args(rest[3:])
     for k, v in vars(ns).items():   # global options given after the operation (e.g. --tenant, --format)

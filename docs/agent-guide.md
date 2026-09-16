@@ -1,7 +1,9 @@
 # servicetitan-cli for agents
 
-You are driving a read-only ServiceTitan tool. It cannot change anything in
-ServiceTitan. Every command prints one JSON document on stdout. Errors are JSON
+You are driving a ServiceTitan tool that reads by default. Nothing changes in
+ServiceTitan unless you run an `api` write operation with `--write` and the
+profile's allowlist permits it (see Writes below). Every command prints one
+JSON document on stdout. Errors are JSON
 on stderr with a non-zero exit code.
 
 ## Learn the tool
@@ -58,14 +60,14 @@ Discover, then call. Never guess a path.
 ```bash
 servicetitan api                              # modules
 servicetitan api jpm                          # resources in a module (aliases: sales, jobs, calls ...)
-servicetitan api jpm jobs                     # operations; writes are marked disabled
+servicetitan api jpm jobs                     # operations; writes are marked gated
 servicetitan api jpm jobs list --describe     # parameters, enums, response fields (JSON)
 servicetitan api jpm jobs list --job-status Completed --completed-on-or-after 2026-09-01T00:00:00Z --count
 servicetitan api jpm jobs get 12345 --fields jobNumber,total,jobStatus
 servicetitan api endpoints --search "words"   # when the module is unknown
 ```
 
-- Every response carries `source`: `snapshot` (metrics/list), `live` (api) or `catalogue` (discovery).
+- Every response carries `source`: `snapshot` (metrics/list), `live` (api), `catalogue` (discovery) or `audit` (api audit).
 - `servicetitan api catalogue status` tells you how old the operation catalogue is; `refresh` updates it
   from ServiceTitan's current OpenAPI documents and lists what changed. Operations with `deprecated: true`
   in `--describe` name their replacement in `replacedBy`.
@@ -78,7 +80,40 @@ servicetitan api endpoints --search "words"   # when the module is unknown
 - Bulk feeds: `api get jpm/v2/export/jobs --export --from 2026-01-01`; keep the
   returned `continueFrom` to resume later.
 - Rate limit is 600 calls per 10 seconds per tenant; the client backs off on 429.
-- Report *data* (Reporting API) needs a POST and is therefore not available here.
+- Report *data* (Reporting API) is fetched with a POST, so here it counts as a write and runs through the
+  write gates like any other non-GET operation, even though ServiceTitan only asks for the `:r` scope.
+
+## Writes
+
+Write operations (POST, PUT, PATCH, DELETE in the tree) run only when all three
+hold:
+
+1. you pass `--write` on that invocation;
+2. the profile's write allowlist permits the operation (`servicetitan profile
+   show` lists it under `writes.allow`; a person sets it with `profile set NAME
+   --allow-writes ...`). Exit 3 with code `WRITES_DISABLED` means it is not
+   allowed, and the hint shows the exact command a person would run;
+3. the token carries the operation's `:w` scope (exit 4, code `SCOPE`, otherwise).
+
+Always look, then preview, then run:
+
+```bash
+servicetitan api jpm jobs create-notes --describe                        # requestBody (fields, required ones) and `requires`
+servicetitan api jpm jobs create-notes 12345 --set text="..." --dry-run  # exact method, URL, params, body; sends nothing
+servicetitan api jpm jobs create-notes 12345 --set text="..." --write --yes
+servicetitan api audit --limit 5                                         # what was attempted, with status and result id
+```
+
+- Bodies: `--body '{"a": 1}'`, `--body @file.json`, `--body-stdin`, or repeated
+  `--set key=value` (values parse as JSON when they can, else text). Required
+  fields from the OpenAPI document are checked before sending.
+- A successful write returns `status`, `data` (the response, usually the created
+  or changed record) and `audit` (the log path). Report the result id.
+- After exit 5 on a write, the change may or may not have been applied: the CLI
+  never retries a write on its own. Check with the matching read operation
+  before repeating it.
+- Do not ask for the allowlist to be widened beyond the operation at hand, and
+  never suggest `*`.
 
 ## Exit codes
 

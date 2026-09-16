@@ -349,6 +349,20 @@ class Context(object):
             out[c.code] = c
         return out
 
+    # ---- write policy
+    def write_patterns(self):
+        """Allowlist patterns from the profile plus SERVICETITAN_ALLOW_WRITES (comma separated)."""
+        from .writes import parse_patterns
+        cfg = self.config
+        patterns = list(((cfg.get("writes") or {}).get("allow")) or [])
+        env_patterns = parse_patterns(self.environ.get("SERVICETITAN_ALLOW_WRITES", ""))
+        return [p.lower() for p in patterns] + [p for p in env_patterns if p not in patterns]
+
+    def write_allowed(self, module, resource, operation):
+        """The allowlist pattern that permits this operation, or None."""
+        from .writes import matches
+        return matches(self.write_patterns(), module, resource, operation)
+
     # ---- snapshot location
     @property
     def data_path(self):
@@ -392,4 +406,5 @@ class Context(object):
                          "clientId": t.get("clientId"), "secretsStored": t.get("secrets", [])} for t in self.tenants],
             "dataPath": self.data_path,
             "secrets": self.secrets.describe() if self.source == "store" else {"backend": "env/.env"},
+            "writes": {"allow": self.write_patterns()},
         }

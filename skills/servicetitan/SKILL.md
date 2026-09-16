@@ -1,13 +1,14 @@
 ---
 name: servicetitan
-description: Answer questions about a company's ServiceTitan data (revenue, service calls, sales close rate, installs, accounts receivable, marketing, call handling, memberships) and refresh or render its operations dashboard, using the read-only `servicetitan` CLI. Use whenever ServiceTitan numbers, jobs, invoices, technicians, campaigns, or the dashboard come up.
+description: Answer questions about a company's ServiceTitan data (revenue, service calls, sales close rate, installs, accounts receivable, marketing, call handling, memberships) and refresh or render its operations dashboard, using the `servicetitan` CLI, which reads by default and writes only behind explicit gates. Use whenever ServiceTitan numbers, jobs, invoices, technicians, campaigns, or the dashboard come up.
 ---
 
 # ServiceTitan via the servicetitan CLI
 
 The `servicetitan` command is installed on this machine and holds credentials
-for one or more companies. It can only read; nothing you run changes
-ServiceTitan.
+for one or more companies. Nothing you run changes ServiceTitan unless you
+run an `api` write operation with `--write` and the profile allows it (see
+Writes below).
 
 ## Orient first
 
@@ -59,8 +60,26 @@ servicetitan api jpm appointments list --starts-on-or-after 2026-09-16T00:00:00Z
 servicetitan api endpoints --search "<words>"     # when the module is unknown
 ```
 
-Write operations appear in the tree marked disabled; the tool cannot execute
-them. Responses say `"source": "live"`; snapshot answers say `"source": "snapshot"`.
+Responses say `"source": "live"`; snapshot answers say `"source": "snapshot"`.
+
+## Writes
+
+Write operations (POST, PUT, PATCH, DELETE) are marked gated in the tree. They
+run only with `--write` on the call, when the profile's allowlist permits the
+operation and the token carries its `:w` scope. Look, preview, run, then report
+the result id:
+
+```bash
+servicetitan api jpm jobs create-notes --describe                        # body fields, required ones, gates
+servicetitan api jpm jobs create-notes 12345 --set text="..." --dry-run  # exact request; nothing is sent
+servicetitan api jpm jobs create-notes 12345 --set text="..." --write --yes
+servicetitan api audit --limit 5                                         # what was attempted and what came back
+```
+
+If the profile refuses (exit 3, code `WRITES_DISABLED`), give the person the
+command from the error's hint; do not look for another way in. After exit 5 on
+a write, check with the matching read before repeating it: the CLI never
+retries a write by itself.
 
 ## Quoting numbers to people
 

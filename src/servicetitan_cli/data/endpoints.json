@@ -1,7 +1,7 @@
 {
 "source":"https://developer.servicetitan.io/api/docs/apis/<api-id> (OpenAPI 3.1)",
 "generatedFrom":"servicetitan_cli.catalogue",
-"generatedAt":"2026-09-16T02:12:02Z",
+"generatedAt":"2026-09-16T04:16:46Z",
 "count":600,
 "readCount":330,
 "modules":[
@@ -26,7 +26,7 @@
 "description":"Bookings, bookings provider tags, contacts, customers, leads, locations, tags",
 "prefix":"/crm/v2",
 "aliases":[],
-"hash":"bfa3605032a2a079",
+"hash":"665baad2d45386fd",
 "versions":[
 "v2"
 ]
@@ -142,7 +142,7 @@
 "aliases":[
 "jobs"
 ],
-"hash":"2e76d534ef76d284",
+"hash":"647ae25e3ff4fda0",
 "versions":[
 "v2"
 ]
@@ -7203,7 +7203,7 @@
 {
 "module":"crm",
 "resource":"contacts",
-"operation":"contact-methods-by-contactId",
+"operation":"contact-methods-by-contact-id",
 "method":"GET",
 "path":"/crm/v2/tenant/{tenant}/contacts/{contactId}/contact-methods",
 "operationId":"ContactMethods_GetContactMethods",
@@ -20457,7 +20457,7 @@
 {
 "module":"jpm",
 "resource":"jobs",
-"operation":"delete-equipment-by-id-equipmentId",
+"operation":"delete-equipment-by-id-equipment-id",
 "method":"DELETE",
 "path":"/jpm/v2/tenant/{tenant}/jobs/{id}/equipment/{equipmentId}",
 "operationId":"JobEquipment_Detach",

@@ -1,4 +1,4 @@
-"""ServiceTitan API client. GET only.
+"""ServiceTitan API client: reads, plus one gated write path.
 
 Facts this client is built on (from ServiceTitan's developer documentation):
 
@@ -15,9 +15,12 @@ Facts this client is built on (from ServiceTitan's developer documentation):
 * Export endpoints (``.../export/<collection>``) stream every record with a
   ``from`` continuation token and ``continueFrom``/``hasMore`` in the answer.
 
-The only non-GET request this module ever makes is the token exchange with
-the auth server. There is deliberately no method to POST, PUT, PATCH or
-DELETE against the API host.
+Reads (``get``, ``get_pages``, ``get_all``, ``export``) never send anything
+but GET to the API host. Writes go through exactly one method, ``write``,
+which refuses to run without a :class:`WriteAuthorization`; only the gate
+code in ``apitree`` constructs one, after the ``--write`` flag, the profile's
+write allowlist and the token's granted ``:w`` scope have all been checked.
+The token exchange with the auth server is the one other POST.
 """
 import json
 import os
@@ -93,6 +96,29 @@ class TokenCache(object):
                     pass
 
 
+WRITE_METHODS = ("POST", "PUT", "PATCH", "DELETE")
+
+
+class WriteAuthorization(object):
+    """Proof that every write gate passed for one operation on one tenant.
+
+    Built only by ``apitree.authorize_write``. ``gates`` records what was
+    checked (flag, allowlist pattern, scope) and lands in the audit log.
+    """
+    __slots__ = ("profile", "tenant", "operation", "scope", "gates")
+
+    def __init__(self, profile, tenant, operation, scope, gates):
+        self.profile = profile
+        self.tenant = tenant
+        self.operation = operation
+        self.scope = scope
+        self.gates = dict(gates)
+
+    def describe(self):
+        return {"profile": self.profile, "tenant": self.tenant, "operation": self.operation, "scope": self.scope,
+                "gates": self.gates}
+
+
 class ServiceTitanClient(object):
     def __init__(self, creds, page_size=DEFAULT_PAGE_SIZE, timeout=(10, 90), token_cache=None, session=None,
                  max_retries=4, progress=None):
@@ -106,7 +132,7 @@ class ServiceTitanClient(object):
         self.timeout = timeout
         self.token_cache = token_cache if token_cache is not None else TokenCache()
         self.session = session or requests.Session()
-        self.session.headers["User-Agent"] = "servicetitan-cli/%s (+read-only)" % __version__
+        self.session.headers["User-Agent"] = "servicetitan-cli/%s" % __version__
         self.max_retries = max_retries
         self.progress = progress or (lambda msg: None)
         self._token = None
@@ -274,8 +300,9 @@ class ServiceTitanClient(object):
             # authentication problem; it never documents 401. So this can be a scope gap, a wrong app key, or an
             # app that is not connected to this tenant.
             raise ApiError("Forbidden (403) for %s" % url, status=code, body=body, url=url,
-                           hint="Either the app lacks this endpoint's read scope (`servicetitan api endpoints --search ...` "
-                                "shows it; `servicetitan auth check` lists the scopes fetch needs), the app key is wrong, "
+                           hint="Either the app lacks the scope this endpoint needs (:r to read, :w to write; "
+                                "`servicetitan api endpoints --search ...` shows it and `servicetitan auth check` lists "
+                                "the read scopes fetch needs), the app key is wrong, "
                                 "or the app is not connected to tenant %s in ServiceTitan (Settings > Integrations > API "
                                 "Application Access)." % self.creds.tenant_id,
                            details={"problem": problem} if problem else None)
@@ -339,6 +366,61 @@ class ServiceTitanClient(object):
             yield items, token, has_more
             if not has_more or (max_batches and n >= max_batches):
                 return
+
+    # ------------------------------------------------------------ writes
+    def write(self, method, path, params=None, body=None, authorization=None):
+        """Send one write. Requires a :class:`WriteAuthorization`.
+
+        Retried only on 429 (the request was rejected, nothing was applied)
+        and once on 401 after a token refresh (the token was rejected before
+        the body was processed). Never retried on 5xx or connection errors:
+        a write may already have been applied and repeating it could
+        duplicate it; the caller sees the error and decides.
+        """
+        if not isinstance(authorization, WriteAuthorization):
+            raise ApiError("Write refused: no write authorization was presented", code="WRITE",
+                           hint="Writes run only through `servicetitan api <module> <resource> <operation> --write` "
+                                "after the profile allowlist and scope checks pass.")
+        method = (method or "").upper()
+        if method not in WRITE_METHODS:
+            raise UsageError("Unsupported write method %r" % method)
+        url = self.resolve_url(path)
+        params = {k: v for k, v in (params or {}).items() if v is not None}
+        refreshed = False
+        attempt = 0
+        while True:
+            attempt += 1
+            self._throttle()
+            try:
+                r = self.session.request(method, url, headers=self._headers(), params=params, json=body,
+                                         timeout=self.timeout)
+            except requests.RequestException as e:
+                raise ApiError("%s %s failed: %s" % (method, url, e), url=url, code="WRITE",
+                               hint="Not retried automatically: the write may or may not have been applied. Check "
+                                    "ServiceTitan before repeating it.")
+            self.requests_made += 1
+            if r.status_code == 401 and not refreshed:
+                refreshed = True
+                self.token_cache.drop(self._cache_key)
+                self.token(force=True)
+                continue
+            if r.status_code == 429 and attempt <= self.max_retries:
+                retry_after = r.headers.get("Retry-After")
+                try:
+                    wait = float(retry_after)
+                except (TypeError, ValueError):
+                    wait = min(2 ** attempt, 30)
+                self.progress("   rate limited, waiting %.0fs" % wait)
+                time.sleep(wait)
+                continue
+            if r.ok:
+                if not r.content:
+                    return {"status": r.status_code, "body": None}
+                try:
+                    return {"status": r.status_code, "body": r.json()}
+                except ValueError:
+                    return {"status": r.status_code, "body": r.text}
+            self._raise_for(r, url)
 
     # ------------------------------------------------------------ convenience
     def check(self):

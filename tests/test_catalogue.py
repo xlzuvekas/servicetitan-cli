@@ -125,3 +125,16 @@ def test_cli_catalogue_commands(capsys, isolated_home, monkeypatch):
     finally:
         catalogue.remove_local()
         endpoints.reload()
+
+
+def test_operation_names_are_lowercase_and_resolvable():
+    from servicetitan_cli import endpoints
+    from servicetitan_cli.catalogue import kebab
+    assert kebab("equipmentId") == "equipment-id" and kebab("report_category") == "report-category" and kebab("id") == "id"
+    doc = endpoints.packaged()
+    assert all(o["operation"] == o["operation"].lower() for o in doc["operations"])
+    for o in doc["operations"]:      # every listed name resolves back to its own operation
+        assert endpoints.resolve_operation(o["module"], o["resource"], o["operation"])["path"] == o["path"]
+    op = endpoints.resolve_operation("jpm", "jobs", "delete-equipment-by-id-equipment-id")
+    assert op["method"] == "DELETE" and op["path"].endswith("/jobs/{id}/equipment/{equipmentId}")
+    assert endpoints.resolve_operation("crm", "contacts", "contact-methods-by-contact-id")["method"] == "GET"

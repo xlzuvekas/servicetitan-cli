@@ -76,7 +76,7 @@ def _api_tree():
             res[r["resource"]] = {"reads": r["reads"], "writes": r["writes"]}
         tree.append({"module": m["module"], "title": m.get("title"), "aliases": m.get("aliases") or [], "resources": res})
     return {"grammar": "servicetitan api <module> <resource> <operation> [PATH-ARGS] [--query-options] [--all|--count|--fields|--raw|--describe]",
-            "note": "Reads execute; writes are discoverable only. `--describe` returns the operation's parameters, types, enums and response fields.",
+            "note": "Reads execute directly; writes need --write plus the profile allowlist and the :w scope. `--describe` returns the operation's parameters, types, enums, response fields and (for writes) the request body shape.",
             "catalogue": {"origin": doc.get("_origin"), "generatedAt": doc.get("generatedAt"),
                           "refresh": "servicetitan api catalogue refresh (downloads ServiceTitan's current OpenAPI documents into the config dir; status/reset also available)"},
             "operations": doc["count"], "reads": doc["readCount"], "modules": tree}
@@ -86,7 +86,7 @@ def build_schema(parser):
     return {
         "name": "servicetitan",
         "version": __version__,
-        "purpose": "Read-only ServiceTitan CLI for AI agents. Every ServiceTitan request is a GET; nothing is ever written back.",
+        "purpose": "ServiceTitan CLI for AI agents. Reads by default; writes exist for every documented operation but run only behind three explicit gates (see conventions.writes).",
         "conventions": {
             "stdout": "exactly one JSON document per invocation (pretty by default; --compact for one line). --format text renders the same structure for people.",
             "stderr": "progress lines and JSON error envelopes {\"error\": {code, exit, message, hint, details}}.",
@@ -95,6 +95,7 @@ def build_schema(parser):
             "tenants": "--tenant CODE narrows to one tenant; default is all tenants of the profile (the dashboard's 'Combined').",
             "snapshots": "fetch writes <config dir>/snapshots/<profile>.json; metrics, list, check, render, duplicates and status read it. Use --data PATH to point elsewhere. Every query response carries snapshot.generatedAt, ageHours and stale so you can decide whether to fetch first (or run `fetch --max-age 6`).",
             "source": "every response says where its data came from: 'snapshot' (metrics, list) or 'live' (api ..., auth check) or 'catalogue' (api discovery).",
+            "writes": "POST/PUT/PATCH/DELETE operations in the api tree run only when (1) the invocation carries --write, (2) the profile's write allowlist matches the operation (servicetitan profile set NAME --allow-writes 'module/resource[/operation]' or SERVICETITAN_ALLOW_WRITES), and (3) the token's granted scopes include the operation's :w scope. --dry-run shows the request without sending; --yes skips the terminal confirmation; every attempt is appended to <config dir>/audit.jsonl (servicetitan api audit). Writes are never retried on 5xx or network errors.",
             "ranges": {"kinds": list(RANGE_KINDS), "note": "Ranges end at --as-of (default now, in the profile timezone). custom needs --start and optionally --end (YYYY-MM-DD)."},
             "ids": "Record ids are namespaced by tenant code ('SD:5510') because separate ServiceTitan tenants reuse raw ids.",
             "environment": {

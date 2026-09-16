@@ -1716,6 +1716,13 @@ something ServiceTitan's scope model forces. Keep "read-only" (OAuth scopes)
 and "GET-only" (HTTP verb, this CLI's own design rule) distinct in any
 documentation that talks about this tool's safety guarantees.
 
+*Project note.* The CLI now runs non-GET operations behind explicit gates
+(`--write` on the call, a per-profile allowlist, the token's granted scope)
+instead of refusing them outright. The scope gate checks the operation's own
+scope, which for report data is `tn.rpr.reports:r`, so report-data POSTs are
+reachable through `servicetitan api reporting ... --write` once a profile
+allows them.
+
 ### 7.4 Everything else about this module matches the rest of the platform
 
 Same environment-specific hosts (`api.servicetitan.io/reporting/v2` /
@@ -1737,9 +1744,11 @@ webhook event referenced in one query-parameter's description
 narrative Webhooks FAQ, an open inconsistency, not a confirmed subscribable
 event.
 
-**Conclusion.** A GET-only tool cannot fetch ServiceTitan report *output* at
-all — not "chooses not to," but architecturally cannot, since both data-fetch
-operations are POST and even the polling GET requires a POST-minted token. It
+**Conclusion.** With writes disabled (the default) the CLI cannot fetch
+ServiceTitan report *output* at all — not "chooses not to," but architecturally
+cannot, since both data-fetch operations are POST and even the polling GET
+requires a POST-minted token; allowing `reporting` writes on a profile opens
+that path. It
 *can* safely offer read-only report **discovery** (categories, reports, one
 report's parameter/field description) since those 5 operations are true
 GETs. Because report definitions are also mutable by any report owner at any

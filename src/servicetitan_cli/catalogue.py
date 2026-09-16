@@ -118,6 +118,11 @@ def clean(text, limit=300):
     return text if len(text) <= limit else text[:limit - 3] + "..."
 
 
+def kebab(name):
+    """camelCase / snake_case -> kebab-case, so every operation name is lowercase."""
+    return re.sub(r"(?<=[a-z0-9])(?=[A-Z])", "-", name).replace("_", "-").lower()
+
+
 def derive_names(prefix, path, method, kind):
     """(resource, operation, version) from a path like /jpm/v2/tenant/{tenant}/jobs/{id}/history.
 
@@ -219,7 +224,7 @@ def build_catalogue(groups, spec_loader, progress=None, generated_at=None):
                 if e.get("version") and i > 0:
                     name = "%s-%s" % (opname, e["version"])
                 elif i > 0:
-                    path_params = [p["name"] for p in e["params"] if p["in"] == "path"]
+                    path_params = [kebab(p["name"]) for p in e["params"] if p["in"] == "path"]
                     name = "%s-by-%s" % (opname, "-".join(path_params)) if path_params else "%s-%d" % (opname, i + 1)
                 while name in used:
                     name += "-alt"

@@ -69,7 +69,8 @@ def test_api_tree_resolution():
     names = {o["operation"] for o in endpoints.operations("telecom", "calls")}
     assert {"list", "list-v2", "export", "get", "recording"} <= names
     est = {o["operation"]: o for o in endpoints.operations("salestech", "estimates")}
-    assert est["export-legacy"]["path"].endswith("/estimates/export") and est["create"]["executable"] is False
+    assert est["export-legacy"]["path"].endswith("/estimates/export") and est["export-legacy"]["write"] is False
+    assert est["create"]["executable"] is True and est["create"]["write"] is True
     d = endpoints.describe(op)
     assert d["example"].startswith("servicetitan api jpm jobs list") and any(q["name"] == "jobStatus" and q.get("enum") for q in d["queryParams"])
     assert "total" in d["responseFields"]
@@ -152,7 +153,7 @@ def test_api_tree_parser_and_execution(isolated_home, monkeypatch):
     ns = apitree.build_parser(write).parse_args([])
     with pytest.raises(UsageError) as ei:
         apitree.execute(write, ns, ctx, client_factory=factory)
-    assert "read-only" in ei.value.message and "list" in ei.value.hint
+    assert "--write" in ei.value.message and "list" in ei.value.hint
 
 
 def test_cli_api_tree_discovery(capsys, isolated_home):

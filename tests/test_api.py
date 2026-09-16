@@ -2,8 +2,9 @@ import json
 import time
 
 import pytest
+import requests
 
-from servicetitan_cli.api import ServiceTitanClient, TokenCache, MAX_PAGE_SIZE
+from servicetitan_cli.api import ServiceTitanClient, TokenCache, WriteAuthorization, MAX_PAGE_SIZE
 from servicetitan_cli.config import Credentials
 from servicetitan_cli.errors import ApiError, AuthError, UsageError
 
@@ -36,6 +37,14 @@ class FakeSession(object):
 
     def get(self, url, headers=None, params=None, timeout=None):
         self.calls.append(("GET", url, params, headers))
+        return self._answer(url)
+
+    def request(self, method, url, headers=None, params=None, json=None, timeout=None):
+        """The single write path; records the body as the fifth element."""
+        self.calls.append((method, url, params, headers, json))
+        return self._answer(url)
+
+    def _answer(self, url):
         for key, responses in self.script.items():
             if key in url:
                 if isinstance(responses, list):
@@ -71,16 +80,65 @@ def test_resolve_url_forms():
     assert ci.auth_url == "https://auth-integration.servicetitan.io/connect/token"
 
 
-def test_only_the_token_endpoint_is_posted():
+def test_reads_never_send_anything_but_get_to_the_api_host():
     c, sess = client({"business-units": FakeResponse(200, {"data": [{"id": 1, "name": "Service"}], "hasMore": False})})
     rep = c.check()
     assert rep["grantedScopes"] == ["tn.jpm.jobs:r", "tn.stt.businessunits:r"]
     assert [x for x in sess.calls if x[0] == "GET"][0][2]["active"] == "Any"
-    posts = [x for x in sess.calls if x[0] == "POST"]
-    assert posts and all(x[1] == c.auth_url for x in posts)
+    non_get = [x for x in sess.calls if x[0] != "GET"]
+    assert non_get and all(x[0] == "POST" and x[1] == c.auth_url for x in non_get)   # only the token request
+    # the client has exactly one way to send a write (`write`), and it demands a WriteAuthorization
     assert not [n for n in dir(ServiceTitanClient) if n in ("post", "put", "patch", "delete")]
     get = [x for x in sess.calls if x[0] == "GET"][0]
     assert get[3]["ST-App-Key"] == "appkey" and get[3]["Authorization"].startswith("Bearer ")
+
+
+def _authorization():
+    return WriteAuthorization("acme", "SD", "jpm jobs create", "tn.jpm.jobs:w",
+                              {"flag": "--write", "allowlist": "jpm/jobs", "scope": "granted"})
+
+
+def test_write_requires_authorization_and_is_not_retried_on_5xx(monkeypatch):
+    sleeps = []
+    monkeypatch.setattr(time, "sleep", lambda s: sleeps.append(s))
+    auth = _authorization()
+    c, sess = client({"jobs": FakeResponse(201, {"id": 9})})
+    with pytest.raises(ApiError) as ei:
+        c.write("POST", "jpm/v2/jobs", body={"a": 1})
+    assert ei.value.code == "WRITE"
+    with pytest.raises(ApiError):
+        c.write("POST", "jpm/v2/jobs", body={"a": 1}, authorization={"flag": "--write"})   # a dict is not an authorization
+    with pytest.raises(UsageError):
+        c.write("GET", "jpm/v2/jobs", authorization=auth)
+    assert not [x for x in sess.calls if x[1] != c.auth_url]   # nothing reached the API host
+    res = c.write("POST", "jpm/v2/jobs", params={"x": None, "y": 1}, body={"a": 1}, authorization=auth)
+    assert res == {"status": 201, "body": {"id": 9}}
+    sent = [x for x in sess.calls if x[1] != c.auth_url]
+    assert len(sent) == 1 and sent[0][0] == "POST" and sent[0][1].endswith("/jpm/v2/tenant/555/jobs")
+    assert sent[0][2] == {"y": 1} and sent[0][4] == {"a": 1} and sent[0][3]["ST-App-Key"] == "appkey"
+    assert auth.describe()["gates"]["allowlist"] == "jpm/jobs"
+    # 5xx: surfaced at once, never repeated (the write may already have been applied)
+    c2, sess2 = client({"jobs": [FakeResponse(503, {}), FakeResponse(201, {"id": 10})]})
+    with pytest.raises(ApiError) as ei:
+        c2.write("POST", "jpm/v2/jobs", body={}, authorization=auth)
+    assert ei.value.status == 503 and len([x for x in sess2.calls if x[1] != c2.auth_url]) == 1
+    # a dropped connection: same rule, and the hint says the outcome is unknown
+
+    class Dropping(FakeSession):
+        def request(self, method, url, **kw):
+            self.calls.append((method, url))
+            raise requests.ConnectionError("reset")
+    sess3 = Dropping({})
+    c3 = ServiceTitanClient(creds(), session=sess3, token_cache=TokenCache(enabled=False), max_retries=2)
+    with pytest.raises(ApiError) as ei:
+        c3.write("POST", "jpm/v2/jobs", body={}, authorization=auth)
+    assert "may or may not have been applied" in ei.value.hint and len([x for x in sess3.calls if x[1] != c3.auth_url]) == 1
+    # 429 (rejected, nothing applied) and a stale token (401) are each retried once
+    c4, sess4 = client({"jobs": [FakeResponse(429, {}, {"Retry-After": "2"}), FakeResponse(401, {}),
+                                 FakeResponse(200, {"ok": True})]})
+    assert c4.write("PATCH", "jpm/v2/jobs/1", body={}, authorization=auth)["body"] == {"ok": True}
+    assert sleeps == [2.0] and len([x for x in sess4.calls if x[1] == c4.auth_url]) == 2
+    assert len([x for x in sess4.calls if x[1] != c4.auth_url]) == 3
 
 
 def test_paging_follows_has_more_and_caps():

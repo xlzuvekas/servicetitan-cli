@@ -47,7 +47,9 @@ DEFAULT_MAPPING = {
 DEFAULT_TARGETS = {"avgTicket": None, "membershipAttachPct": None, "lowTicketPct": None, "optionsPerCall": None}
 DEFAULT_RULES = {"lowTicketThreshold": 150, "boardDays": 45}
 DEFAULT_WINDOW = {"operationalStart": None, "arMonthsBack": 20}
-SETTING_KEYS = ("company", "timezone", "environment", "departmentMapping", "targets", "rules", "window", "personAliases")
+SETTING_KEYS = ("company", "timezone", "environment", "departmentMapping", "targets", "rules", "window", "personAliases",
+                "writes")
+DEFAULT_WRITES = {"allow": []}   # patterns like "jpm/jobs/create-notes", "crm/customers", "jpm/*", "*"; empty = no writes
 
 
 def new_profile(company_name=None, subtitle="Operations Dashboard", timezone=None, environment="production"):
@@ -61,6 +63,7 @@ def new_profile(company_name=None, subtitle="Operations Dashboard", timezone=Non
         "rules": copy.deepcopy(DEFAULT_RULES),
         "window": copy.deepcopy(DEFAULT_WINDOW),
         "personAliases": {},
+        "writes": copy.deepcopy(DEFAULT_WRITES),
     }
 
 
@@ -164,6 +167,11 @@ class ProfileStore(object):
                 raise ConfigError("Unknown profile setting %r" % key, hint="Settings: %s" % ", ".join(SETTING_KEYS))
             if key == "environment":
                 value = validate_environment(value)
+            if key == "writes":
+                if not isinstance(value, dict) or not isinstance(value.get("allow", []), list):
+                    raise ConfigError('writes must look like {"allow": ["jpm/jobs", ...]}')
+                prof["writes"] = {"allow": [str(x).strip().lower() for x in value.get("allow", []) if str(x).strip()]}
+                continue
             if isinstance(value, dict) and isinstance(prof.get(key), dict):
                 prof[key].update(value)
             else:
