@@ -1,4 +1,4 @@
-"""The three write gates, request bodies, confirmation and the audit log."""
+"""The three write gates, the write policy, request bodies, confirmation and the audit log."""
 import io
 import json
 import os
@@ -16,10 +16,14 @@ NOTE = ["12345", "--set", "text=Customer called back"]
 
 
 # ---------------------------------------------------------------- policy pieces
-def test_allowlist_patterns():
+def test_policy_words_and_patterns():
     assert writes.parse_patterns("jpm/jobs/create-notes, CRM/customers;  *  ,,jpm/jobs/create-notes") == \
         ["jpm/jobs/create-notes", "crm/customers", "*"]
-    assert writes.parse_patterns("") == [] and writes.parse_patterns(None) == []
+    assert writes.parse_patterns("") == [] and writes.parse_patterns(None) == [] and writes.parse_patterns("none") == []
+    assert writes.parse_patterns("auto, jpm/jobs") == ["auto", "jpm/jobs"] and writes.parse_patterns("off") == []
+    assert writes.follows_credential(["auto"]) and writes.follows_credential(["jpm", "auto"])
+    assert not writes.follows_credential(["jpm"]) and not writes.follows_credential([])
+    assert writes.matches(["auto"], "jpm", "jobs", "create-notes") is None          # auto is decided by the token
     assert writes.matches(["jpm/jobs/create-notes"], "jpm", "jobs", "create-notes") == "jpm/jobs/create-notes"
     assert writes.matches(["jpm/jobs/create-notes"], "jpm", "jobs", "create") is None
     assert writes.matches(["crm/customers"], "crm", "customers", "update") == "crm/customers"
@@ -30,6 +34,16 @@ def test_allowlist_patterns():
     assert writes.matches(["JPM/Jobs"], "jpm", "jobs", "create") == "JPM/Jobs"          # case-insensitive
     assert writes.matches([], "jpm", "jobs", "create") is None and writes.matches(None, "jpm", "jobs", "create") is None
     assert writes.matches(["a/b/c/d", ""], "a", "b", "c") is None                        # malformed patterns never match
+    assert writes.describe_policy([]).startswith("off")
+    assert writes.describe_policy(["auto"]).startswith("auto:")
+    assert "plus: crm/customers" in writes.describe_policy(["auto", "crm/customers"])
+    assert writes.describe_policy(["jpm/jobs"]).startswith("allowlist: jpm/jobs")
+
+
+def test_writable_operations_from_granted_scopes():
+    allowed = endpoints.writable_operations(["tn.jpm.jobs:w", "tn.jpm.jobs:r", "tn.stt.businessunits:r"])
+    assert set(allowed) == {"jpm/jobs"} and "create-notes" in allowed["jpm/jobs"] and "create" in allowed["jpm/jobs"]
+    assert endpoints.writable_operations(["tn.jpm.jobs:r"]) == {} and endpoints.writable_operations(None) is None
 
 
 def test_build_body_sources_and_validation(tmp_path, monkeypatch, capsys):
@@ -135,6 +149,36 @@ def _run(op, argv, holder):
     return apitree.execute(op, ns, Context(), client_factory=factory)
 
 
+def test_default_policy_follows_the_credential(env_creds, monkeypatch):
+    op = endpoints.resolve_operation("jpm", "jobs", "create-notes")
+    holder = {"client": WriteClient(None)}
+    assert Context().write_patterns() == ["auto"] and Context().writes_follow_credential()
+    assert Context().describe()["writes"]["policy"].startswith("auto")
+    # the credential was granted tn.jpm.jobs:w, so the note can be written with no allowlist to maintain
+    env = _run(op, NOTE + ["--write"], holder)
+    assert env["gates"] == {"flag": "--write", "allowlist": "auto", "scope": "granted"} and len(holder["client"].calls) == 1
+    assert env["status"] == 200 and env["data"]["id"] == 777 and writes.read()[-1]["gates"]["allowlist"] == "auto"
+    # not granted: the scope error, whose hint says the policy follows the credential
+    holder["client"].scopes = ["tn.jpm.jobs:r", "tn.crm.customers:w"]
+    with pytest.raises(AuthError) as ei:
+        _run(op, NOTE + ["--write"], holder)
+    assert ei.value.code == "SCOPE" and ei.value.exit_code == 4 and "'auto'" in ei.value.hint
+    assert len(holder["client"].calls) == 1
+    # a token that does not say what it was granted cannot decide under auto: fail closed
+    holder["client"].scopes = None
+    with pytest.raises(ConfigError) as ei:
+        _run(op, NOTE + ["--write"], holder)
+    assert ei.value.code == "WRITES_DISABLED" and "did not report" in ei.value.message and len(holder["client"].calls) == 1
+    # ...but an explicit pattern is a person's decision and runs, recorded as not verifiable
+    monkeypatch.setenv("SERVICETITAN_ALLOW_WRITES", "jpm/jobs/create-notes")
+    env = _run(op, NOTE + ["--write"], holder)
+    assert env["gates"] == {"flag": "--write", "allowlist": "jpm/jobs/create-notes", "scope": "not verifiable from token"}
+    # auto plus explicit patterns is a union
+    monkeypatch.setenv("SERVICETITAN_ALLOW_WRITES", "auto, crm/customers")
+    holder["client"].scopes = ["tn.jpm.jobs:w"]
+    assert _run(op, NOTE + ["--write"], holder)["gates"]["allowlist"] == "auto"
+
+
 def test_write_gates_in_order(env_creds, monkeypatch):
     op = endpoints.resolve_operation("jpm", "jobs", "create-notes")
     holder = {"client": WriteClient(None)}
@@ -142,21 +186,24 @@ def test_write_gates_in_order(env_creds, monkeypatch):
     with pytest.raises(UsageError) as ei:
         _run(op, ["12345"], holder)
     assert "--write" in ei.value.message and "--allow-writes" in ei.value.hint and "list" in ei.value.hint
-    # gate 2: the allowlist, empty by default
+    # gate 2: the policy. Off means exit 3 before any token is fetched
+    monkeypatch.setenv("SERVICETITAN_ALLOW_WRITES", "none")
     with pytest.raises(ConfigError) as ei:
         _run(op, NOTE + ["--write"], holder)
-    assert ei.value.code == "WRITES_DISABLED" and ei.value.exit_code == 3 and "jpm/jobs/create-notes" in ei.value.hint
-    monkeypatch.setenv("SERVICETITAN_ALLOW_WRITES", "jpm/jobs/create")   # a different operation
-    with pytest.raises(ConfigError):
+    assert ei.value.code == "WRITES_DISABLED" and ei.value.exit_code == 3 and "turned off" in ei.value.message
+    assert "--allow-writes auto" in ei.value.hint and holder["client"].tokens == 0
+    # an explicit allowlist that names other operations
+    monkeypatch.setenv("SERVICETITAN_ALLOW_WRITES", "jpm/jobs/create, crm")
+    with pytest.raises(ConfigError) as ei:
         _run(op, NOTE + ["--write"], holder)
-    assert not holder["client"].calls and holder["client"].tokens == 0
-    # gate 3: the granted scope
+    assert ei.value.code == "WRITES_DISABLED" and "jpm/jobs/create-notes" in ei.value.hint and holder["client"].tokens == 0
+    # gate 3: the granted scope, even when an explicit pattern names the operation
     monkeypatch.setenv("SERVICETITAN_ALLOW_WRITES", "jpm/jobs")
     holder["client"].scopes = ["tn.jpm.jobs:r"]
     with pytest.raises(AuthError) as ei:
         _run(op, NOTE + ["--write"], holder)
     assert ei.value.code == "SCOPE" and ei.value.exit_code == 4 and "tn.jpm.jobs:w" in ei.value.message
-    assert not holder["client"].calls
+    assert not holder["client"].calls and "'auto'" not in ei.value.hint
     # all three pass
     holder["client"].scopes = ["tn.jpm.jobs:r", "tn.jpm.jobs:w"]
     env = _run(op, NOTE + ["--write"], holder)
@@ -176,20 +223,24 @@ def test_dry_run_sends_nothing_and_is_logged(env_creds, monkeypatch):
     op = endpoints.resolve_operation("jpm", "jobs", "create-notes")
     holder = {}
     env = _run(op, NOTE + ["--dry-run"], holder)
-    assert env["dryRun"] is True and env["wouldRun"] is False and env["allowedBy"] is None and env["write"] is True
+    assert env["dryRun"] is True and env["wouldRun"] is False and env["allowedBy"] == "auto" and env["write"] is True
+    assert env["policy"].startswith("auto") and "tn.jpm.jobs:w" in env["checkedAtRunTime"]
     assert env["body"] == {"text": "Customer called back"} and env["url"].endswith("/tenant/555/jobs/12345/notes")
-    assert not holder["client"].calls and holder["client"].tokens == 0
-    monkeypatch.setenv("SERVICETITAN_ALLOW_WRITES", "*")
+    assert not holder["client"].calls and holder["client"].tokens == 0        # offline
     env = _run(op, NOTE + ["--dry-run", "--write"], holder)
-    assert env["wouldRun"] is True and env["allowedBy"] == "*" and not holder["client"].calls
+    assert env["wouldRun"] is True and not holder["client"].calls
+    monkeypatch.setenv("SERVICETITAN_ALLOW_WRITES", "none")
+    env = _run(op, NOTE + ["--dry-run", "--write"], holder)
+    assert env["wouldRun"] is False and env["allowedBy"] is None and env["policy"].startswith("off")
+    monkeypatch.setenv("SERVICETITAN_ALLOW_WRITES", "jpm")
+    assert _run(op, NOTE + ["--dry-run", "--write"], holder)["allowedBy"] == "jpm"
     rows = writes.read()
-    assert len(rows) == 2 and all(r["dryRun"] for r in rows)
+    assert len(rows) == 4 and all(r["dryRun"] for r in rows)
     with pytest.raises(UsageError):                       # a dry run still validates the body
         _run(op, ["12345", "--dry-run"], holder)
 
 
 def test_failed_write_is_logged_and_never_retried(env_creds, monkeypatch):
-    monkeypatch.setenv("SERVICETITAN_ALLOW_WRITES", "jpm")
     op = endpoints.resolve_operation("jpm", "jobs", "create-notes")
     holder = {"client": WriteClient(None)}
     holder["client"].result = ApiError("HTTP 500 for x", status=500)
@@ -200,17 +251,7 @@ def test_failed_write_is_logged_and_never_retried(env_creds, monkeypatch):
     assert rows[-1]["status"] == 500 and "500" in rows[-1]["error"] and rows[-1]["dryRun"] is False
 
 
-def test_unverifiable_scope_is_recorded_not_assumed(env_creds, monkeypatch):
-    monkeypatch.setenv("SERVICETITAN_ALLOW_WRITES", "jpm/jobs")
-    op = endpoints.resolve_operation("jpm", "jobs", "create-notes")
-    holder = {"client": WriteClient(None)}
-    holder["client"].scopes = None                    # token response without a scope list
-    env = _run(op, NOTE + ["--write"], holder)
-    assert env["gates"]["scope"] == "not verifiable from token" and holder["client"].calls
-
-
 def test_terminal_confirmation(env_creds, monkeypatch, capsys):
-    monkeypatch.setenv("SERVICETITAN_ALLOW_WRITES", "jpm/jobs")
     op = endpoints.resolve_operation("jpm", "jobs", "create-notes")
     holder = {"client": WriteClient(None)}
     monkeypatch.setattr("sys.stdin", Tty("no\n"))
@@ -228,9 +269,11 @@ def test_terminal_confirmation(env_creds, monkeypatch, capsys):
 
 
 # ---------------------------------------------------------------- through the CLI
-def test_cli_profile_allowlist_describe_and_audit(capsys, isolated_home, monkeypatch):
+def test_cli_profile_policy_describe_and_audit(capsys, isolated_home, monkeypatch):
     code, out, err = run_cli(capsys, "profile", "add", "acme", "--company", "Acme", "--timezone", "America/Denver", "--use")
     assert code == 0, err
+    code, out, _ = run_cli(capsys, "profile", "show", "acme")
+    assert out["writes"]["allow"] == ["auto"]                                  # the default: the credential decides
     code, out, err = run_cli(capsys, "profile", "set", "acme", "--allow-writes", "JPM/jobs/create-notes, crm/customers")
     assert code == 0, err
     code, out, _ = run_cli(capsys, "profile", "show", "acme")
@@ -239,10 +282,12 @@ def test_cli_profile_allowlist_describe_and_audit(capsys, isolated_home, monkeyp
     assert code == 0, err
     code, out, _ = run_cli(capsys, "profile", "show", "acme")
     assert out["writes"]["allow"] == []
-    # the contract is visible without credentials
+    code, out, err = run_cli(capsys, "profile", "set", "acme", "--allow-writes", "auto")
+    assert code == 0 and run_cli(capsys, "profile", "show", "acme")[1]["writes"]["allow"] == ["auto"]
+    # the contract is visible without credentials or path parameters
     code, out, _ = run_cli(capsys, "api", "jpm", "jobs", "create-notes", "--describe")
     assert code == 0 and out["write"] is True and out["requestBody"]["required"] == ["text"] and len(out["requires"]) == 3
-    assert "--write --dry-run" in out["example"] and out["scope"] == "tn.jpm.jobs:w"
+    assert "--write --dry-run" in out["example"] and out["scope"] == "tn.jpm.jobs:w" and "auto" in out["requires"][1]
     code, out, _ = run_cli(capsys, "api", "jpm", "jobs")
     assert code == 0 and any(o["operation"] == "create-notes" and o["write"] for o in out["operations"])
     code, out, _ = run_cli(capsys, "api", "audit")
@@ -255,11 +300,33 @@ def test_cli_dry_run_and_refusal(capsys, isolated_home, monkeypatch):
         monkeypatch.setenv(k, v)
     code, out, err = run_cli(capsys, "api", "jpm", "jobs", "create-notes", "12345", "--set", "text=hi", "--dry-run")
     assert code == 0, err
-    assert out["dryRun"] is True and out["wouldRun"] is False and out["method"] == "POST" and out["body"] == {"text": "hi"}
-    assert out["url"] == "https://api.servicetitan.io/jpm/v2/tenant/555/jobs/12345/notes"
+    assert out["dryRun"] is True and out["wouldRun"] is False and out["allowedBy"] == "auto" and out["body"] == {"text": "hi"}
+    assert out["method"] == "POST" and out["url"] == "https://api.servicetitan.io/jpm/v2/tenant/555/jobs/12345/notes"
     code, out, err = run_cli(capsys, "api", "jpm", "jobs", "create-notes", "12345", "--set", "text=hi")
     assert code == 2 and json.loads(err)["error"]["code"] == "USAGE" and "--write" in json.loads(err)["error"]["message"]
+    monkeypatch.setenv("SERVICETITAN_ALLOW_WRITES", "none")            # turned off: refused before any network call
+    code, out, err = run_cli(capsys, "api", "jpm", "jobs", "create-notes", "12345", "--set", "text=hi", "--write")
+    assert code == 3 and json.loads(err)["error"]["code"] == "WRITES_DISABLED"
+    monkeypatch.setenv("SERVICETITAN_ALLOW_WRITES", "crm/customers")   # allowlist naming something else
     code, out, err = run_cli(capsys, "api", "jpm", "jobs", "create-notes", "12345", "--set", "text=hi", "--write")
     assert code == 3 and json.loads(err)["error"]["code"] == "WRITES_DISABLED"
     code, out, err = run_cli(capsys, "api", "audit")
     assert code == 0 and out["count"] == 1 and out["entries"][0]["dryRun"] is True and out["entries"][0]["body"] == {"text": "hi"}
+
+
+def test_cli_auth_check_reports_what_the_credential_can_write(capsys, isolated_home, monkeypatch):
+    from servicetitan_cli.api import ServiceTitanClient
+    for k, v in (("SERVICETITAN_TENANT_ID", "555"), ("SERVICETITAN_CLIENT_ID", "c"), ("SERVICETITAN_CLIENT_SECRET", "s"),
+                 ("SERVICETITAN_APP_KEY", "k")):
+        monkeypatch.setenv(k, v)
+    report = {"authenticated": True, "grantedScopes": ["tn.jpm.jobs:r", "tn.jpm.jobs:w", "tn.stt.businessunits:r"],
+              "businessUnits": [{"id": 1, "name": "Service", "active": True}]}
+    monkeypatch.setattr(ServiceTitanClient, "check", lambda self: report)
+    code, out, err = run_cli(capsys, "auth", "check")
+    assert code == 0, err
+    t = out["tenants"][0]
+    assert t["scopes"]["write"] == ["tn.jpm.jobs:w"] and t["writes"]["policy"].startswith("auto")
+    assert "create-notes" in t["writes"]["credentialAllows"]["jpm/jobs"] and list(t["writes"]["credentialAllows"]) == ["jpm/jobs"]
+    report["grantedScopes"] = ["tn.jpm.jobs:r"]
+    code, out, _ = run_cli(capsys, "auth", "check")
+    assert out["tenants"][0]["writes"]["credentialAllows"] == {} and "no write scope" in out["tenants"][0]["writes"]["note"]

@@ -89,11 +89,15 @@ Write operations (POST, PUT, PATCH, DELETE in the tree) run only when all three
 hold:
 
 1. you pass `--write` on that invocation;
-2. the profile's write allowlist permits the operation (`servicetitan profile
-   show` lists it under `writes.allow`; a person sets it with `profile set NAME
-   --allow-writes ...`). Exit 3 with code `WRITES_DISABLED` means it is not
-   allowed, and the hint shows the exact command a person would run;
-3. the token carries the operation's `:w` scope (exit 4, code `SCOPE`, otherwise).
+2. the profile's write policy permits the operation. The default policy `auto`
+   allows exactly the operations whose `:w` scope the credential was granted
+   (`servicetitan auth check` lists them under `writes.credentialAllows`); a
+   person may have narrowed it with `profile set NAME --allow-writes ...` or
+   turned it off with `--no-writes` (`profile show` reports it under `writes`).
+   Exit 3 with code `WRITES_DISABLED` means the policy refuses, and the hint
+   shows the exact command a person would run;
+3. the token carries the operation's `:w` scope (exit 4, code `SCOPE`,
+   otherwise). Only the app registration and the tenant admin can change that.
 
 Always look, then preview, then run:
 
@@ -112,7 +116,7 @@ servicetitan api audit --limit 5                                         # what 
 - After exit 5 on a write, the change may or may not have been applied: the CLI
   never retries a write on its own. Check with the matching read operation
   before repeating it.
-- Do not ask for the allowlist to be widened beyond the operation at hand, and
+- Do not ask for the policy to be widened beyond the operation at hand, and
   never suggest `*`.
 
 ## Exit codes

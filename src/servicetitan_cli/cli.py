@@ -118,10 +118,11 @@ def build_parser():
     x.add_argument("--department-mapping", help='JSON, e.g. \'{"Install": ["install"], "Service": ["service"], "exclude": ["warehouse"]}\'')
     x.add_argument("--window", help='JSON, e.g. \'{"operationalStart": "2026-01-01", "arMonthsBack": 20}\'')
     x.add_argument("--person-aliases", help='JSON map of "CODE:userId" -> canonical name')
-    x.add_argument("--allow-writes", metavar="PATTERNS",
-                   help="comma-separated write allowlist: module, module/resource, module/resource/operation or * "
-                        "(replaces the list), e.g. \"jpm/jobs/create-notes,crm/customers\"")
-    x.add_argument("--no-writes", action="store_true", help="clear the write allowlist (the default state)")
+    x.add_argument("--allow-writes", metavar="POLICY",
+                   help="write policy, comma-separated, replaces the current one: `auto` (the default: follow the "
+                        "credential's granted :w scopes), patterns module, module/resource, module/resource/operation "
+                        "or *, or `none`; e.g. \"jpm/jobs/create-notes,crm/customers\"")
+    x.add_argument("--no-writes", action="store_true", help="turn writes off for this profile, whatever the credential allows")
     x = _sub(ps, "import", "create a profile from the dashboard template's config.json + .env "
                             "(paths via the global --config / --env-file; default ./config.json and ./.env)")
     x.add_argument("name")
@@ -272,8 +273,9 @@ def build_parser():
                          "Built-ins: `api get <path>` for a raw path, `api endpoints --search WORDS`, `api modules`,\n"
                          "`api catalogue status|refresh|reset`, `api audit`.\n"
                          "Reads run live for one tenant (--tenant CODE when the profile has several). Writes run only\n"
-                         "with --write, when the profile allows the operation (`profile set NAME --allow-writes ...`)\n"
-                         "and the token carries its :w scope; --dry-run previews and audit.jsonl records every attempt.")
+                         "with --write, when the profile's write policy permits the operation (default: whatever :w\n"
+                         "scopes the credential was granted; `profile set NAME --allow-writes ...` narrows) and the token\n"
+                         "carries its :w scope; --dry-run previews and audit.jsonl records every attempt.")
     x.add_argument("rest", nargs=argparse.REMAINDER, metavar="<module> <resource> <operation> ...")
 
     # ---- misc
@@ -590,8 +592,9 @@ def cmd_tenant(ctx, args):
 
 def cmd_auth(ctx, args):
     from .api import ServiceTitanClient
-    from .endpoints import missing_scopes
+    from .endpoints import missing_scopes, writable_operations
     from .fetch import FETCH_ENDPOINTS, dept_for_business_unit
+    from .writes import describe_policy
     if args.auth_cmd != "check":
         raise UsageError("auth needs an action", hint="check")
     mapping = ctx.config["departmentMapping"]
@@ -610,7 +613,12 @@ def cmd_auth(ctx, args):
             entry.update({"ok": True, "businessUnits": len(rep["businessUnits"]), "classification": buckets})
             if rep.get("grantedScopes") is not None:
                 missing = missing_scopes(rep["grantedScopes"], FETCH_ENDPOINTS)
-                entry["scopes"] = {"granted": len(rep["grantedScopes"]), "missingForFetch": missing}
+                entry["scopes"] = {"granted": len(rep["grantedScopes"]), "missingForFetch": missing,
+                                   "write": sorted(s for s in rep["grantedScopes"] if s.endswith(":w"))}
+                writable = writable_operations(rep["grantedScopes"])
+                entry["writes"] = {"policy": describe_policy(ctx.write_patterns()), "credentialAllows": writable,
+                                   "note": "each of these still needs --write on the call" if writable
+                                           else "the credential holds no write scope, so nothing can write"}
                 if missing:
                     entry["scopeHint"] = ("`servicetitan fetch` will get 403s on the endpoints needing these scopes. "
                                           "Add the read scopes in the developer portal, then re-approve the app in "

@@ -1717,8 +1717,9 @@ and "GET-only" (HTTP verb, this CLI's own design rule) distinct in any
 documentation that talks about this tool's safety guarantees.
 
 *Project note.* The CLI now runs non-GET operations behind explicit gates
-(`--write` on the call, a per-profile allowlist, the token's granted scope)
-instead of refusing them outright. The scope gate checks the operation's own
+(`--write` on the call, a per-profile write policy that by default follows the
+credential's granted scopes, and the token's granted scope) instead of refusing
+them outright. The scope gate checks the operation's own
 scope, which for report data is `tn.rpr.reports:r`, so report-data POSTs are
 reachable through `servicetitan api reporting ... --write` once a profile
 allows them.

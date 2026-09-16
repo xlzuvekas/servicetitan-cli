@@ -65,9 +65,10 @@ Responses say `"source": "live"`; snapshot answers say `"source": "snapshot"`.
 ## Writes
 
 Write operations (POST, PUT, PATCH, DELETE) are marked gated in the tree. They
-run only with `--write` on the call, when the profile's allowlist permits the
-operation and the token carries its `:w` scope. Look, preview, run, then report
-the result id:
+run only with `--write` on the call, when the profile's write policy permits
+the operation (by default: whatever `:w` scopes the credential was granted; a
+person may have narrowed it) and the token carries that scope. Look, preview,
+run, then report the result id:
 
 ```bash
 servicetitan api jpm jobs create-notes --describe                        # body fields, required ones, gates
@@ -76,8 +77,9 @@ servicetitan api jpm jobs create-notes 12345 --set text="..." --write --yes
 servicetitan api audit --limit 5                                         # what was attempted and what came back
 ```
 
-If the profile refuses (exit 3, code `WRITES_DISABLED`), give the person the
-command from the error's hint; do not look for another way in. After exit 5 on
+If the policy refuses (exit 3, `WRITES_DISABLED`) or the credential lacks the
+scope (exit 4, `SCOPE`), give the person the hint from the error; do not look
+for another way in. After exit 5 on
 a write, check with the matching read before repeating it: the CLI never
 retries a write by itself.
 

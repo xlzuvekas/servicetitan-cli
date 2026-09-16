@@ -8,8 +8,10 @@ Python 3.9+, `requests` + `keyring` only. Source in `src/servicetitan_cli/`, tes
 - **Reads are GET; writes have one gate.** `ServiceTitanClient.write` is the
   only code that sends a non-GET request to the API host, and it refuses to run
   without a `WriteAuthorization`, which only `apitree.authorize_write` builds
-  after the three gates pass (`--write`, the profile allowlist or
-  `SERVICETITAN_ALLOW_WRITES`, the token's granted `:w` scope). Never give
+  after the three gates pass: `--write`; the profile's write policy, where
+  `auto` (the default) follows the credential's granted `:w` scopes, patterns
+  narrow, `--no-writes` turns off and `SERVICETITAN_ALLOW_WRITES` replaces;
+  and the token's granted `:w` scope, checked on every write. Never give
   fetch, metrics or listing code a way to write. The token POST to the auth
   host is the other exception.
   `tests/test_api.py::test_reads_never_send_anything_but_get_to_the_api_host`

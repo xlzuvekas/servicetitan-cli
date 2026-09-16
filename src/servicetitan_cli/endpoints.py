@@ -176,8 +176,10 @@ def describe(op):
     if op.get("body"):
         out["requestBody"] = op["body"]
     if op["method"] != "GET":
-        out["requires"] = ["--write on the invocation", "profile write allowlist match (servicetitan profile set <profile> --allow-writes ...)",
-                           "token scope %s" % (op.get("scope") or "?")]
+        out["requires"] = ["--write on the invocation",
+                           "profile write policy: 'auto' (the default) allows it when the credential was granted its :w scope; "
+                           "`servicetitan profile set <profile> --allow-writes ...` narrows to named operations or turns writes off",
+                           "token scope %s, checked on every write" % (op.get("scope") or "?")]
         out["example"] += " --write --dry-run" + (" --body '{...}'" if op.get("body") else "")
     if op.get("version"):
         out["version"] = op["version"]
@@ -237,3 +239,18 @@ def missing_scopes(granted, paths):
         return []
     have = set(granted)
     return sorted({scope for scope in scopes_for(paths).values() if scope and scope not in have})
+
+
+def writable_operations(granted):
+    """{"module/resource": [write operations whose scope is in ``granted``]}; None when ``granted`` is unknown.
+
+    This is what the default write policy ("auto") lets a credential do.
+    """
+    if granted is None:
+        return None
+    have = set(granted)
+    out = {}
+    for op in catalogue()["operations"]:
+        if op["method"] != "GET" and op.get("scope") in have:
+            out.setdefault("%s/%s" % (op["module"], op["resource"]), []).append(op["operation"])
+    return {k: sorted(v) for k, v in sorted(out.items())}

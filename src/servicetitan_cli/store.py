@@ -49,7 +49,8 @@ DEFAULT_RULES = {"lowTicketThreshold": 150, "boardDays": 45}
 DEFAULT_WINDOW = {"operationalStart": None, "arMonthsBack": 20}
 SETTING_KEYS = ("company", "timezone", "environment", "departmentMapping", "targets", "rules", "window", "personAliases",
                 "writes")
-DEFAULT_WRITES = {"allow": []}   # patterns like "jpm/jobs/create-notes", "crm/customers", "jpm/*", "*"; empty = no writes
+DEFAULT_WRITES = {"allow": ["auto"]}   # "auto" = follow the credential's granted :w scopes; or patterns like
+                                       # "jpm/jobs/create-notes", "crm/customers", "*"; [] = writes off
 
 
 def new_profile(company_name=None, subtitle="Operations Dashboard", timezone=None, environment="production"):

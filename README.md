@@ -20,15 +20,18 @@ per-profile allowlist and the matching API scope.
   is a command tree generated from ServiceTitan's own OpenAPI documents: modules,
   then resources, then operations, then every parameter typed and described.
   All 330 read operations run live. The 270 write operations run only behind
-  three gates (`--write` on the call, the profile's write allowlist, a token
-  with the operation's `:w` scope), preview with `--dry-run` and land in an
-  audit log.
+  three gates (`--write` on the call, the profile's write policy, a token
+  with the operation's `:w` scope). By default the policy follows the
+  credential: whatever write scopes the tenant admin granted the app is
+  exactly what the CLI can write. `--dry-run` previews and an audit log
+  records.
 - **The dashboard is still here.** `servicetitan render` writes the same
   single-file operations dashboard the template produced.
 
-Out of the box it only reads: every ServiceTitan call is a `GET` and the only
-`POST` is the OAuth token exchange with ServiceTitan's auth server. Writes stay
-off until a profile allows them; see [Writes](#writes).
+With a read-only app registration, which the setup guide recommends, every
+ServiceTitan call is a `GET` and the only `POST` is the OAuth token exchange
+with ServiceTitan's auth server. An app granted write scopes can write those
+resources, and only on calls that carry `--write`; see [Writes](#writes).
 
 ## Install
 
@@ -140,20 +143,28 @@ still there for a raw path.
 
 ### Writes
 
-Writes are off by default and stay off until three independent gates pass:
+A write runs only when three things hold on the same call:
 
-1. `--write` on the invocation, so a copied read command can never turn into a
-   write;
-2. the profile's write allowlist permits the operation:
-   `servicetitan profile set acme --allow-writes "jpm/jobs/create-notes,crm/customers"`.
-   Patterns are `module`, `module/resource`, `module/resource/operation` or `*`;
-   `--no-writes` clears the list; `SERVICETITAN_ALLOW_WRITES` does the same job
-   in CI;
-3. the token ServiceTitan issued carries the operation's `:w` scope, which the
-   app registration must request and the tenant admin must approve.
+1. `--write` is on the invocation, so a copied read command can never turn
+   into a write.
+2. The profile's write policy permits the operation. The default policy is
+   `auto`: the credential decides. ServiceTitan grants an app only the `:w`
+   scopes its registration asked for and the tenant admin approved, so an app
+   registered read-only can never write, and an app granted `tn.jpm.jobs:w`
+   can write jobs (notes, cancellations, equipment) but nothing else.
+   `servicetitan auth check` lists what the credential can write. When the
+   app's scopes are broader than what an agent should touch, narrow the policy:
+   `servicetitan profile set acme --allow-writes "jpm/jobs/create-notes,crm/customers"`
+   (patterns `module`, `module/resource`, `module/resource/operation`, `*` or
+   `auto`; the list is replaced). `--no-writes` turns writes off for the
+   profile whatever the credential allows. `SERVICETITAN_ALLOW_WRITES` replaces
+   the policy in CI (`none` turns writes off).
+3. The token ServiceTitan issued for this call carries the operation's `:w`
+   scope. This is checked on every write, whatever the policy says.
 
 ```bash
-servicetitan api jpm jobs create-notes --describe                                        # body fields, required ones, gates
+servicetitan auth check                                                                   # includes what the credential can write
+servicetitan api jpm jobs create-notes --describe                                         # body fields, required ones, gates
 servicetitan api jpm jobs create-notes 12345 --set text="Customer called back" --dry-run  # the exact request; nothing is sent
 servicetitan api jpm jobs create-notes 12345 --set text="Customer called back" --write    # runs when the gates pass
 servicetitan api jpm jobs create-notes 12345 --body @note.json --write --yes              # unattended
@@ -179,9 +190,9 @@ snapshot an error instead of a warning.
 
 | Command | What it does |
 |---|---|
-| `profile list/show/add/remove/use/set/import/export` | Companies, their dashboard settings and their write allowlist (`set --allow-writes`). `export` prints a shareable config with no ids or secrets. |
+| `profile list/show/add/remove/use/set/import/export` | Companies, their dashboard settings and their write policy (`set --allow-writes`, `--no-writes`). `export` prints a shareable config with no ids or secrets. |
 | `tenant list/add/update/set-secret/remove` | ServiceTitan accounts inside a profile, with secret storage. |
-| `auth check` | Authenticate every tenant; preview business-unit classification. |
+| `auth check` | Authenticate every tenant; preview business-unit classification; list what the credential can write. |
 | `status` | Profile summary plus snapshot freshness and record counts. Cheap; run first. |
 | `fetch` | Pull a snapshot (read-only). `--max-age`, `--tenant` for one tenant, `--max-pages`, `--page-size`. |
 | `demo` | Synthetic snapshot for trying things offline. |
@@ -230,7 +241,7 @@ pointed at. The essentials:
 3. `servicetitan metrics <area>` for questions with a known answer shape; add `--explain` before quoting a number to a person.
 4. `servicetitan list <kind>` for "which ones" questions; trim payloads with `--fields` and `--limit`.
 5. `servicetitan api <module>` to discover, `--describe` to see a contract, then run the operation for anything the snapshot does not hold.
-6. Writes: `--describe`, then `--dry-run`, then `--write`. If the profile refuses (exit 3, `WRITES_DISABLED`), the hint names the command a person runs to allow it.
+6. Writes: `--describe`, then `--dry-run`, then `--write`. If the policy refuses (exit 3, `WRITES_DISABLED`) or the credential lacks the scope (exit 4, `SCOPE`), the hint says what a person must change.
 
 Ask the CLI itself: `servicetitan schema`. For Claude Code or Cowork, install
 `skills/servicetitan/SKILL.md` as a skill and the agent will reach for the CLI

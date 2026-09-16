@@ -351,15 +351,24 @@ class Context(object):
 
     # ---- write policy
     def write_patterns(self):
-        """Allowlist patterns from the profile plus SERVICETITAN_ALLOW_WRITES (comma separated)."""
+        """The write policy: SERVICETITAN_ALLOW_WRITES when set (it replaces the profile's; "none" or an empty
+        value turns writes off), else the profile's writes.allow, else the default ["auto"]."""
         from .writes import parse_patterns
-        cfg = self.config
-        patterns = list(((cfg.get("writes") or {}).get("allow")) or [])
-        env_patterns = parse_patterns(self.environ.get("SERVICETITAN_ALLOW_WRITES", ""))
-        return [p.lower() for p in patterns] + [p for p in env_patterns if p not in patterns]
+        from .store import DEFAULT_WRITES
+        if "SERVICETITAN_ALLOW_WRITES" in self.environ:
+            return parse_patterns(self.environ["SERVICETITAN_ALLOW_WRITES"])
+        allow = (self.config.get("writes") or {}).get("allow")
+        if allow is None:
+            allow = DEFAULT_WRITES["allow"]
+        return [str(p).lower() for p in allow]
+
+    def writes_follow_credential(self):
+        """True when the policy contains "auto": the credential's granted :w scopes decide."""
+        from .writes import follows_credential
+        return follows_credential(self.write_patterns())
 
     def write_allowed(self, module, resource, operation):
-        """The allowlist pattern that permits this operation, or None."""
+        """The explicit allowlist pattern that permits this operation, or None ("auto" is decided by the token)."""
         from .writes import matches
         return matches(self.write_patterns(), module, resource, operation)
 
@@ -395,7 +404,9 @@ class Context(object):
         return op, ar_dt.strftime("%Y-%m-%dT00:00:00Z")
 
     def describe(self):
+        from .writes import describe_policy
         cfg = self.config
+        patterns = self.write_patterns()
         return {
             "profile": self.profile_name,
             "source": self.source,
@@ -406,5 +417,6 @@ class Context(object):
                          "clientId": t.get("clientId"), "secretsStored": t.get("secrets", [])} for t in self.tenants],
             "dataPath": self.data_path,
             "secrets": self.secrets.describe() if self.source == "store" else {"backend": "env/.env"},
-            "writes": {"allow": self.write_patterns()},
+            "writes": {"allow": patterns, "policy": describe_policy(patterns)},
         }
+

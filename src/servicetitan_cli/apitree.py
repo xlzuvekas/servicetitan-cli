@@ -81,10 +81,10 @@ def build_parser(op, add_common=None, prog=None):
     if op.get("deprecated"):
         desc.append("DEPRECATED by ServiceTitan; prefer the newer version of this operation (see --describe replacedBy).")
     if op["method"] != "GET":
-        desc.append("WRITE OPERATION. Runs only with --write, when the profile's write allowlist permits it "
-                    "(`servicetitan profile set <profile> --allow-writes ...`) and the token carries scope %s. "
-                    "--dry-run shows the exact request; every executed write is recorded in the audit log."
-                    % (op.get("scope") or "(unknown)"))
+        desc.append("WRITE OPERATION. Runs only with --write, when the profile's write policy permits it (default: "
+                    "whatever :w scopes the credential was granted; `servicetitan profile set <profile> --allow-writes ...` "
+                    "narrows or turns it off) and the token carries scope %s. --dry-run shows the exact request; every "
+                    "executed write is recorded in the audit log." % (op.get("scope") or "(unknown)"))
         if op.get("body"):
             req = op["body"].get("required") or []
             desc.append("request body fields: " + ", ".join(
@@ -168,9 +168,11 @@ def require_write_flag(op, ns, ctx):
         return
     op_key = "%s %s %s" % (op["module"], op["resource"], op["operation"])
     raise UsageError("%s is a write operation (%s %s); it runs only with --write." % (op_key, op["method"], op["path"]),
-                     hint="Add --write (and --dry-run first to see the request). The profile must also allow it: "
-                          "servicetitan profile set %s --allow-writes \"%s/%s\" ; reads for this resource: %s"
-                          % (ctx.profile_name, op["module"], op["resource"],
+                     hint="Add --write (and --dry-run first to see the request). The profile's write policy must also "
+                          "permit it: by default it follows the credential's granted :w scopes (`servicetitan auth check` "
+                          "lists them); `servicetitan profile set %s --allow-writes ...` narrows it. Reads for this "
+                          "resource: %s"
+                          % (ctx.profile_name,
                              ", ".join(o["operation"] for o in endpoints.operations(op["module"], op["resource"]) if o["method"] == "GET")))
 
 
@@ -178,26 +180,49 @@ def authorize_write(op, ns, ctx, tenant, client):
     """Run the three gates; return a WriteAuthorization or raise."""
     from .api import WriteAuthorization
     op_key = "%s %s %s" % (op["module"], op["resource"], op["operation"])
+    op_path = "%s/%s/%s" % (op["module"], op["resource"], op["operation"])
     require_write_flag(op, ns, ctx)
-    pattern = ctx.write_allowed(op["module"], op["resource"], op["operation"])
-    if not pattern:
-        raise ConfigError("Writes are not allowed for %s on profile %r" % (op_key, ctx.profile_name), code="WRITES_DISABLED",
-                          hint="Allow it with: servicetitan profile set %s --allow-writes \"%s/%s/%s\" (patterns: module, "
-                               "module/resource, module/resource/operation, or *; comma-separated). CI: "
-                               "SERVICETITAN_ALLOW_WRITES. Current allowlist: %s"
-                               % (ctx.profile_name, op["module"], op["resource"], op["operation"],
-                                  ", ".join(ctx.write_patterns()) or "(empty)"))
+    # gate 2: the profile's policy. Explicit patterns decide here; "auto" defers to the token's scopes below.
+    patterns = ctx.write_patterns()
+    explicit = ctx.write_allowed(op["module"], op["resource"], op["operation"])
+    auto = ctx.writes_follow_credential()
+    if not explicit and not auto:
+        if not patterns:
+            raise ConfigError("Writes are turned off for profile %r" % ctx.profile_name, code="WRITES_DISABLED",
+                              hint="Turn them on with `servicetitan profile set %s --allow-writes auto` (follow the "
+                                   "credential's granted :w scopes) or `--allow-writes \"%s\"` (this operation only). "
+                                   "In CI: SERVICETITAN_ALLOW_WRITES." % (ctx.profile_name, op_path))
+        raise ConfigError("Profile %r's write allowlist does not include %s" % (ctx.profile_name, op_key),
+                          code="WRITES_DISABLED",
+                          hint="Add it with `servicetitan profile set %s --allow-writes \"%s,%s\"` (patterns: module, "
+                               "module/resource, module/resource/operation, * or auto; the list is replaced). "
+                               "Current allowlist: %s" % (ctx.profile_name, ",".join(patterns), op_path, ", ".join(patterns)))
+    # gate 3: the scope ServiceTitan actually granted this credential, on every write whatever the policy says
     client.token()
     granted = client.granted_scopes
     scope = op.get("scope")
     if granted is not None and scope and scope not in granted:
-        raise AuthError("The token for tenant %s was not granted scope %s, which %s needs" % (tenant["code"], scope, op_key),
+        raise AuthError("The credential for tenant %s was not granted scope %s, which %s needs" % (tenant["code"], scope, op_key),
                         code="SCOPE",
-                        hint="Add the write scope to the app in the developer portal and have the tenant admin approve the "
+                        hint="Add the scope to the app in the developer portal and have the tenant admin approve the "
                              "new app version (Settings > Integrations > API Application Access > Upgrade to New Version). "
-                             "Granted: %d scope(s); read scopes never imply write." % len(granted))
+                             "Granted: %d scope(s); read scopes never imply write.%s"
+                             % (len(granted), " The profile's write policy is 'auto', so it allows exactly what the "
+                                              "credential was granted." if auto and not explicit else ""))
+    if not explicit:                       # policy "auto": the credential decides, so its scopes must be known
+        if granted is None:
+            raise ConfigError("The token for tenant %s did not report its granted scopes, so the 'auto' write policy "
+                              "cannot decide %s" % (tenant["code"], op_key), code="WRITES_DISABLED",
+                              hint="Allow the operation explicitly: servicetitan profile set %s --allow-writes \"auto,%s\""
+                                   % (ctx.profile_name, op_path))
+        if not scope:
+            raise ConfigError("%s documents no scope, so the 'auto' write policy cannot decide it" % op_key,
+                              code="WRITES_DISABLED",
+                              hint="Allow it explicitly: servicetitan profile set %s --allow-writes \"auto,%s\""
+                                   % (ctx.profile_name, op_path))
+        explicit = "auto"
     return WriteAuthorization(ctx.profile_name, tenant["code"], op_key, scope,
-                              {"flag": "--write", "allowlist": pattern,
+                              {"flag": "--write", "allowlist": explicit,
                                "scope": "granted" if (granted is not None and scope) else "not verifiable from token"})
 
 
@@ -220,10 +245,14 @@ def execute_write(op, ns, ctx, client_factory, tenant_code=None):
     op_key = "%s %s %s" % (op["module"], op["resource"], op["operation"])
     preview = {"source": "live", "write": True, "tenant": tenant["code"], "operation": op_key, "method": op["method"],
                "url": url, "params": params, "body": body, "scope": op.get("scope")}
-    if getattr(ns, "dry_run", False):
-        preview["dryRun"] = True
-        preview["allowedBy"] = ctx.write_allowed(op["module"], op["resource"], op["operation"])
-        preview["wouldRun"] = bool(getattr(ns, "write", False) and preview["allowedBy"])
+    if getattr(ns, "dry_run", False):          # offline: the policy is evaluated, the token's scopes are not fetched
+        explicit = ctx.write_allowed(op["module"], op["resource"], op["operation"])
+        auto = ctx.writes_follow_credential()
+        preview.update({"dryRun": True, "policy": writes.describe_policy(ctx.write_patterns()),
+                        "allowedBy": explicit or ("auto" if auto else None),
+                        "wouldRun": bool(getattr(ns, "write", False) and (explicit or auto)),
+                        "checkedAtRunTime": ("the token's granted scopes must include %s" % op["scope"]) if op.get("scope")
+                        else "this operation documents no scope: 'auto' cannot allow it, only an explicit pattern can"})
         writes.record({"profile": ctx.profile_name, "tenant": tenant["code"], "operation": op_key, "method": op["method"],
                        "url": url, "params": params, "body": body, "dryRun": True})
         return preview
@@ -306,8 +335,9 @@ def execute(op, ns, ctx, client_factory, tenant_code=None):
 # ---------------------------------------------------------------- overviews
 def overview():
     return {"source": "catalogue", "usage": "servicetitan api <module> [<resource> [<operation> [ARGS] [--options]]]",
-            "note": "Reads run directly. Writes run only with --write, when the profile's write allowlist permits the "
-                    "operation and the token carries its :w scope; --dry-run previews, audit.jsonl records. "
+            "note": "Reads run directly. Writes run only with --write, when the profile's write policy permits the "
+                    "operation (default: whatever :w scopes the credential was granted) and the token carries its :w scope; "
+                    "--dry-run previews, audit.jsonl records. "
                     "Add --help at any level for a readable version, --describe on an operation for its contract.",
             "builtins": {"get": "GET any path directly", "endpoints": "search operations by words",
                          "modules": "module list", "catalogue": "status | refresh | reset of the operation catalogue",
@@ -349,7 +379,7 @@ def overview_text(data):
     elif "operations" in data:
         lines.append("%s %s: operations (servicetitan api %s %s <operation> --help):\n" % (data["module"], data["resource"], data["module"], data["resource"]))
         for o in data["operations"]:
-            flag = "" if o["method"] == "GET" else "  (write: needs --write, allowlist, scope)"
+            flag = "" if o["method"] == "GET" else "  (write: needs --write, policy, scope)"
             if o.get("deprecated"):
                 flag += "  (deprecated)"
             lines.append("  %-28s %-6s %s%s" % (o["operation"], o["method"], o["path"], flag))

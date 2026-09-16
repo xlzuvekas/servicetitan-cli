@@ -33,12 +33,14 @@ portal docs call that out as a security violation.
    example `Claude`) and a short description (`internal reporting`).
 4. **API scopes**: pick *Tenant APIs* and tick the **read** scope of every
    area you want to see. Read and write scopes are separate; a write scope does
-   not include read. There are many boxes; the tool reads by default, so leave
-   every write scope unticked unless you mean to let it run specific write
-   operations. In that case tick only the `:w` scopes those operations need
-   (`servicetitan api <module> <resource> <operation> --describe` names the
-   scope) and allow them per profile with `servicetitan profile set NAME
-   --allow-writes ...`. The snapshot pull needs exactly these read scopes (`servicetitan auth check` reports any that are missing):
+   not include read. There are many boxes. The write scopes you tick here are
+   exactly what the CLI will be able to write: its default write policy follows
+   the credential, and every write still needs `--write` on the call. Leave
+   every write scope unticked unless you mean to let it change things; then
+   tick only the `:w` scopes those operations need (`servicetitan api <module>
+   <resource> <operation> --describe` names the scope). A profile can narrow
+   that further with `servicetitan profile set NAME --allow-writes ...` or turn
+   writes off with `--no-writes`. The snapshot pull needs exactly these read scopes (`servicetitan auth check` reports any that are missing):
    `tn.acc.invoices:r`, `tn.crm.customers:r`, `tn.dis.appointmentassignments:r`, `tn.inv.purchaseorders:r`, `tn.inv.vendors:r`, `tn.jpm.appointments:r`, `tn.jpm.jobs:r`, `tn.jpm.jobtypes:r`, `tn.mem.memberships:r`, `tn.mem.membershiptypes:r`, `tn.mrk.campaigns:r`, `tn.sal.estimates:r`, `tn.stt.businessunits:r`, `tn.stt.employees:r`, `tn.stt.technicians:r`, `tn.tlc.calls:r`. Anything you want to reach through `servicetitan api get`
    needs its own read scope too; `servicetitan api endpoints --search ...` shows
    the scope next to each endpoint. Changing scopes later creates a new app

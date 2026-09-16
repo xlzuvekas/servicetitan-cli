@@ -3,11 +3,16 @@
 A write runs only when three independent gates pass:
 
 1. the caller asked for it on this invocation (``--write``);
-2. the profile (or ``SERVICETITAN_ALLOW_WRITES``) allows this operation:
-   patterns are ``module``, ``module/resource`` or ``module/resource/operation``,
-   each segment ``*`` or an exact name, matched case-insensitively; an empty
-   list means writes are off, which is the default;
-3. the token ServiceTitan issued carries the operation's ``:w`` scope.
+2. the profile's write policy permits the operation. The default policy is
+   ``auto``: follow the credential, i.e. allow exactly the operations whose
+   ``:w`` scope ServiceTitan granted the app (the tenant admin approved those
+   scopes when connecting the app). Explicit patterns (``module``,
+   ``module/resource``, ``module/resource/operation``, ``*``) allow named
+   operations instead of, or as well as, ``auto``; an empty list (``none``)
+   turns writes off. ``SERVICETITAN_ALLOW_WRITES`` replaces the profile's
+   policy when set;
+3. the token ServiceTitan issued carries the operation's scope (``:w`` for
+   nearly every write), checked on every call whatever the policy says.
 
 Every executed write (and every dry run) is appended to ``audit.jsonl`` in
 the config directory.
@@ -22,22 +27,33 @@ from .dates import UTC, iso_z
 from .errors import UsageError
 from .paths import config_dir, ensure_dir
 
+AUTO = "auto"                            # policy word: follow the credential's granted :w scopes
+OFF = ("none", "off")                    # policy words meaning "no writes"
 
-# ---------------------------------------------------------------- allowlist
+
+# ---------------------------------------------------------------- policy
 def parse_patterns(text):
+    """Comma/space separated policy words and patterns -> list. ``none`` contributes nothing."""
     out = []
     for raw in (text or "").replace(";", ",").split(","):
         for token in raw.split():
             token = token.strip().strip("/").lower()
-            if token and token not in out:
-                out.append(token)
+            if token in OFF or not token or token in out:
+                continue
+            out.append(token)
     return out
 
 
+def follows_credential(patterns):
+    return AUTO in (patterns or [])
+
+
 def matches(patterns, module, resource, operation):
-    """Return the first pattern permitting module/resource/operation, else None."""
+    """The first explicit pattern permitting module/resource/operation, else None (``auto`` is decided by the token)."""
     target = [module.lower(), resource.lower(), operation.lower()]
     for pattern in patterns or []:
+        if pattern == AUTO:
+            continue
         parts = [p.strip() for p in pattern.lower().strip("/").split("/") if p.strip()]
         if not parts or len(parts) > 3:
             continue
@@ -45,6 +61,19 @@ def matches(patterns, module, resource, operation):
         if all(p == "*" or p == t for p, t in zip(parts, target)):
             return pattern
     return None
+
+
+def describe_policy(patterns):
+    """One line a person can read: what the profile lets writes do."""
+    patterns = list(patterns or [])
+    explicit = [p for p in patterns if p != AUTO]
+    if not patterns:
+        return "off: no write runs, whatever the credential allows"
+    if explicit and AUTO in patterns:
+        return "auto (every operation whose :w scope the credential was granted) plus: %s" % ", ".join(explicit)
+    if AUTO in patterns:
+        return "auto: every operation whose :w scope the credential was granted"
+    return "allowlist: %s (each still needs its :w scope on the token)" % ", ".join(explicit)
 
 
 # ---------------------------------------------------------------- request body
