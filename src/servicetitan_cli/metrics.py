@@ -87,7 +87,8 @@ class Query(object):
             if basis is None:
                 continue
             days = max(0, int((self.as_of - basis).total_seconds() // 86400))
-            self.ar.append(dict(i, basis_dt=basis, days_ago=days, amount=float(i.get("balance") or 0)))
+            self.ar.append(dict(i, basis_dt=basis, days_ago=days, amount=float(i.get("balance") or 0),
+                                has_due_date=bool(i.get("dueDate"))))
         self.purchase_orders = [dict(p, date_dt=self._dt(p.get("date")), amount=float(p.get("total") or 0))
                                 for p in self.data.get("purchaseOrders") or []]
         self.calls = []
@@ -414,6 +415,7 @@ def accounting(q):
     customers = [{"customer": n, "invoices": c["invoices"], "oldestDaysPastDue": c["oldest"],
                   "bucket": ar_bucket(c["oldest"]), "balance": r2(c["amount"])} for n, c in by_customer.items()]
     customers.sort(key=lambda r: -r["balance"])
+    no_due = [a for a in ar if not a["has_due_date"]]
     by_vendor = defaultdict(lambda: {"amount": 0.0, "orders": 0})
     for p in pos:
         by_vendor[p.get("vendor")]["amount"] += p["amount"]
@@ -424,7 +426,9 @@ def accounting(q):
     out.update({
         "kpis": {"totalAR": r2(ar_total), "openInvoices": len(ar), "arPast30Days": r2(overdue_total),
                  "invoicesPast30Days": len(overdue), "arPast30Pct": pct(overdue_total, ar_total),
+                 "invoicesWithoutDueDate": len(no_due), "arWithoutDueDate": r2(sum(a["amount"] for a in no_due)),
                  "committedOnOpenPOs": r2(po_total), "openPOs": len(pos), "allPOs": all_po_count},
+        "arAgingBasis": "days past dueDate; invoices with no payment term (no dueDate) are aged from invoiceDate",
         "arAging": buckets,
         "arByCustomer": customers[:50],
         "openPOsByVendor": vendors[:25],
@@ -540,7 +544,7 @@ AREA_FUNCS = {"revenue": revenue, "service": service, "sales": sales, "install":
 
 DEFINITIONS = {
     "revenue": {
-        "completedRevenue": "Sum of job.total over jobs completed in the range (completedOn), excluding business units mapped to 'exclude'.",
+        "completedRevenue": "Sum of job.total over jobs completed in the range (completedOn), excluding business units mapped to 'exclude'. This is the gross billed amount: credit memos, adjustment, refund and write-off invoices are separate records in ServiceTitan and are not netted here (`api accounting credit-memos list` reaches them).",
         "deltaVsPriorPeriodPct": "Change versus the same-length window immediately before the range; null when that window has no completed revenue in the snapshot (e.g. YTD).",
         "avgBilledJob": "Completed revenue divided by jobs that billed more than $0. Warranty/callback work and sales visits bill nothing and would drag the average down, so they are excluded here and counted in noChargeOrSalesVisits.",
         "restOfPeriod": "Revenue on booked jobs (job.total, else the sold estimate) dated by their next future appointment, from now to the end of the period the range names.",
@@ -551,14 +555,14 @@ DEFINITIONS = {
     "service": {
         "avgTicket": "Completed Service revenue divided by billed Service calls (revenue > 0).",
         "revenuePerDispatch": "Completed Service revenue divided by all completed Service calls, no-charge included.",
-        "membershipAttachPct": "Share of completed Service calls where the same customer bought a membership on the same calendar day (approximate; the API offers no direct membership-to-job link).",
+        "membershipAttachPct": "Share of completed Service calls where the same customer bought a membership on the same calendar day (approximate). The membership's activatedFromId is an invoice-item id, not a job id; job.membershipId marks a job associated with a membership, which may be service under an existing plan rather than a sale.",
         "lowTicketPct": "Share of billed Service calls billing more than $0 but under rules.lowTicketThreshold.",
         "optionsPerCall": "Average number of estimates attached per completed Service call.",
         "targets": "Configured targets from the profile; met is computed in the direction that is good for each metric.",
     },
     "sales": {
         "opportunitiesPresented": "Chances to sell first presented in the range: estimates grouped one per job, so a Good/Better/Best set counts once.",
-        "closeRatePct": "Of the opportunities presented in the range, the share that has since been won (cohort logic, never won-this-month over presented-this-month).",
+        "closeRatePct": "Of the opportunities presented in the range, the share that has since been won (cohort logic, never won-this-month over presented-this-month). ServiceTitan's own Close Rate is defined differently: per job type against a configurable sold threshold, counting jobs that are not no-charge, recall or warranty as opportunities. Expect the two to differ.",
         "bookedValue": "Value of opportunities won during the range whenever first presented; counts only the options that sold.",
         "avgSoldTicket": "presentedAndWonValue divided by presentedAndWon.",
         "stillOpenValueAtBestOption": "Undecided opportunities from the range valued at their single largest option, i.e. what is realistically still winnable.",
@@ -570,7 +574,7 @@ DEFINITIONS = {
     },
     "accounting": {
         "totalAR": "Balances on invoices that carry an invoice date, as of the snapshot's generatedAt: ServiceTitan only exposes the current balance, so --as-of moves the aging clock but cannot rewind balances. Balances on undated (not yet issued) invoices are excluded because they are unbilled future work.",
-        "arAging": "Days past the due date (falling back to the invoice date), bucketed 0-30/31-60/61-90/91-120/120+.",
+        "arAging": "Days past the due date, bucketed 0-30/31-60/61-90/91-120/120+. Invoices with no payment term have no due date and are aged from the invoice date here; ServiceTitan's own AR report leaves those out of the buckets, so compare with invoicesWithoutDueDate in mind. Balances already net any credit memo or payment applied to the invoice; unapplied customer credit (`api accounting credit-memos list`) is not subtracted.",
         "committedOnOpenPOs": "Total of purchase orders in Pending, Sent or PartiallyReceived status (Received, Exported and Canceled are closed). This is committed spend, not accounts payable; vendor bills are available live via `servicetitan api accounting ap-bills list` and are not in the snapshot.",
     },
     "marketing": {

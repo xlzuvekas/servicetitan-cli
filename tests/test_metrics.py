@@ -123,6 +123,7 @@ def test_install_accounting_marketing_office_memberships_exact():
     a = compute(query(), "accounting")
     assert a["kpis"]["totalAR"] == 3500 and a["kpis"]["arPast30Days"] == 2500 and a["kpis"]["arPast30Pct"] == 71.4
     assert a["kpis"]["committedOnOpenPOs"] == 700 and a["kpis"]["openPOs"] == 1 and a["kpis"]["allPOs"] == 10
+    assert a["kpis"]["invoicesWithoutDueDate"] == 1 and a["kpis"]["arWithoutDueDate"] == 500 and "dueDate" in a["arAgingBasis"]
     buckets = {b["bucket"]: b["amount"] for b in a["arAging"]}
     assert buckets == {"0-30": 1000, "31-60": 0, "61-90": 2000, "91-120": 0, "120+": 500}
     assert a["arByCustomer"][0] == {"customer": "Cust B", "invoices": 1, "oldestDaysPastDue": 76, "bucket": "61-90", "balance": 2000}
