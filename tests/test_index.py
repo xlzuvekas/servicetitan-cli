@@ -53,6 +53,19 @@ def test_catalogue_definition_and_result_documents(tmp_path):
     assert indexing.flatten_text({"a": {"b": 1}, "c": [1, 2], "d": [{"e": "x"}]}) == "a.b: 1; c: 1, 2; d.0.e: x"
 
 
+def test_lexical_tokens_keep_identifiers_whole_and_split():
+    toks = indexing.tokens("Invoice INV-2231 (SPR:5510) balance $1,200.00 due 2026-08-01 for Jane Doe")
+    assert {"invoice", "inv-2231", "inv", "2231", "spr:5510", "spr", "5510", "1200.00", "1200", "2026-08-01", "2026", "jane"} <= set(toks)
+    assert "1,200.00" not in toks and indexing.identifier_tokens(indexing.tokens("job 1008 for jane")) == ["1008"]
+    assert indexing.identifier_tokens(indexing.tokens("SPR:5510 on 2026-08-01")) == ["spr:5510", "5510", "2026-08-01", "2026"]
+    lex = {"nodes": [{"id": "a", "len": 4, "kind": "jobs"}, {"id": "b", "len": 4, "kind": "invoices"}],
+           "postings": {"1008": [[0, 1]], "job": [[0, 1], [1, 1]]}, "avgdl": 4.0}
+    ranked = indexing.lexical_search(lex, indexing.tokens("job 1008"), lambda n: True, 5)
+    assert [r[0] for r in ranked] == ["a", "b"] and ranked[0][1] > ranked[1][1]      # the rare number outweighs the common word
+    assert indexing.exact_matches(lex, indexing.tokens("job 1008"), lambda n: True) == {"a": ["1008"]}
+    assert indexing.exact_matches(lex, indexing.tokens("job 1008"), lambda n: n["kind"] == "invoices") == {}
+
+
 def test_status_and_errors_without_the_extra(capsys, isolated_home, monkeypatch, demo_path):
     monkeypatch.setattr(indexing, "available", lambda: (False, "No module named 'llama_index'"))
     code, out, _ = run_cli(capsys, "index", "status", "--data", demo_path)
@@ -102,6 +115,46 @@ def test_build_query_and_save_end_to_end(capsys, isolated_home, monkeypatch, dem
     # a second build is incremental and finds nothing to do
     code, out, _ = run_cli(capsys, "index", "build", "--data", demo_path, "--sources", "snapshot,catalogue,definitions")
     assert out["rebuilt"] is False and out["added"] == 0 and out["updated"] == 0 and out["removed"] == 0 and out["unchanged"] > 700
+    assert out["lexical"]["nodes"] > 700 and out["lexical"]["tokens"] > 1000
+    assert out["vectors"]["rows"] == out["lexical"]["nodes"] and out["vectors"]["dim"] == 256 and out["vectors"]["missing"] == 0
+    assert os.path.exists(os.path.join(out["path"], "vectors.npy")) and os.path.exists(os.path.join(out["path"], "lexical.json"))
+    # exact numbers: an invoice by its number, with nothing but the number as the query
+    code, out, err = run_cli(capsys, "index", "query", "1619", "--data", demo_path, "--top", "3")
+    assert code == 0, err
+    top_hit = out["hits"][0]
+    assert top_hit["kind"] == "invoices" and top_hit["metadata"]["number"] == "1619" and "1619" in top_hit["matched"]
+    assert out["retrieval"]["mode"] == "hybrid" and out["retrieval"]["fusion"] == "rrf" and out["retrieval"]["exactMatches"] >= 1
+    assert out["retrieval"]["queryTokens"] == ["1619"] and top_hit["scores"]["lexical"] > 0 and top_hit["scores"]["fused"] > 0
+    code, out, _ = run_cli(capsys, "index", "query", "job 1008", "--data", demo_path, "--kind", "jobs", "--top", "3")
+    assert out["hits"][0]["metadata"]["number"] == "1008" and out["hits"][0]["matched"] == ["1008"]
+    # one side only
+    code, out, _ = run_cli(capsys, "index", "query", "1619", "--data", demo_path, "--mode", "lexical", "--top", "3")
+    assert out["retrieval"]["mode"] == "lexical" and out["retrieval"]["fusion"] is None and out["retrieval"]["vectorCandidates"] == 0
+    assert out["hits"][0]["metadata"]["number"] == "1619" and all(h["scores"]["vector"] is None for h in out["hits"])
+    code, out, _ = run_cli(capsys, "index", "query", "invoice balance", "--data", demo_path, "--mode", "vector", "--top", "3")
+    assert out["retrieval"]["mode"] == "vector" and out["retrieval"]["exactMatches"] == 0 and out["retrieval"]["lexicalCandidates"] == 0
+    assert all(h["scores"]["lexical"] is None and h["scores"]["vector"] is not None for h in out["hits"])
+    # narrowing before ranking: dates and names apply to both sides
+    code, out, _ = run_cli(capsys, "index", "query", "invoice", "--data", demo_path, "--kind", "invoices", "--since", "2026-08-01",
+                           "--until", "2026-08-31", "--top", "10")
+    assert out["count"] > 0 and all("2026-08-01" <= h["date"] <= "2026-08-31" for h in out["hits"])
+    code, out, _ = run_cli(capsys, "index", "query", "balance", "--data", demo_path, "--name", "priya", "--top", "5")
+    assert out["count"] > 0 and all("priya" in h["name"].lower() for h in out["hits"])
+    code, out, err = run_cli(capsys, "index", "query", "x", "--data", demo_path, "--since", "yesterday")
+    assert code == 2
+    code, out, err = run_cli(capsys, "index", "query", "x", "--data", demo_path, "--rerank", "bogus")
+    assert code == 2 and "reranker" in json.loads(err)["error"]["message"].lower()
+    code, out, _ = run_cli(capsys, "index", "status", "--data", demo_path)
+    assert out["lexical"]["nodes"] > 700 and out["vectors"]["rows"] == out["lexical"]["nodes"]
+    # exact-number lookups need neither LlamaIndex nor a model: lexical mode keeps working when the extra is gone
+    real_available = indexing.available
+    monkeypatch.setattr(indexing, "available", lambda: (False, "No module named 'llama_index'"))
+    code, out, err = run_cli(capsys, "index", "query", "1619", "--data", demo_path, "--mode", "lexical", "--top", "2")
+    assert code == 0, err
+    assert out["hits"][0]["metadata"]["number"] == "1619" and out["retrieval"]["mode"] == "lexical"
+    code, out, err = run_cli(capsys, "index", "query", "1619", "--data", demo_path)
+    assert code == 3 and json.loads(err)["error"]["code"] == "INDEX_UNAVAILABLE"
+    monkeypatch.setattr(indexing, "available", real_available)
     # --save stores the result and indexes it at once
     code, out, err = run_cli(capsys, "list", "invoices", "--data", demo_path, "--min-days-past-due", "60", "--limit", "5",
                              "--save", "--save-label", "overdue sixty")

@@ -139,6 +139,12 @@ servicetitan index query "overdue" --kind result       # what was saved before
 servicetitan index results --show FILE                 # the full saved result
 ```
 
+Exact numbers work: `index query 1619` or `index query "INV-2231"` finds the record
+carrying that number through the lexical side and lists it first with `matched`.
+Narrow with `--kind`, `--tenant`, `--since`/`--until` (records only) and
+`--name "<customer>"`; `--mode lexical` searches numbers and words only and needs
+no model, so it answers in well under a second; `--mode vector` is meaning only.
+
 Hits are retrieval, not answers: run the `next` command on a hit before quoting
 a figure, and prefer `list`/`metrics` for anything numeric. A warning on stderr
 says when the index is behind the snapshot. Everything runs on this machine;
