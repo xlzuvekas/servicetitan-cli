@@ -94,8 +94,10 @@ class TokenCache(object):
 
 
 class ServiceTitanClient(object):
-    def __init__(self, creds, page_size=DEFAULT_PAGE_SIZE, timeout=30, token_cache=None, session=None,
+    def __init__(self, creds, page_size=DEFAULT_PAGE_SIZE, timeout=(10, 90), token_cache=None, session=None,
                  max_retries=4, progress=None):
+        # ServiceTitan's documented server-side request timeout is 100 seconds; large pages can take a while,
+        # so reads get most of that while connection failures still surface quickly.
         self.creds = creds
         self.environment = creds.environment if creds.environment in API_HOSTS else "production"
         self.host = API_HOSTS[self.environment]
@@ -268,10 +270,15 @@ class ServiceTitanClient(object):
                                  "(Settings > Integrations > API Application Access)." % self.creds.tenant_id,
                             details={"status": code, "url": url, "body": body[:300]})
         if code == 403:
+            # ServiceTitan documents 403 ("Provided authentication is insufficient to grant access") for every
+            # authentication problem; it never documents 401. So this can be a scope gap, a wrong app key, or an
+            # app that is not connected to this tenant.
             raise ApiError("Forbidden (403) for %s" % url, status=code, body=body, url=url,
-                           hint="The app lacks the API scope for this endpoint (`servicetitan api endpoints --search ...` "
-                                "shows the scope). Add the read scope in the developer portal, then re-approve the app "
-                                "inside ServiceTitan.", details={"problem": problem} if problem else None)
+                           hint="Either the app lacks this endpoint's read scope (`servicetitan api endpoints --search ...` "
+                                "shows it; `servicetitan auth check` lists the scopes fetch needs), the app key is wrong, "
+                                "or the app is not connected to tenant %s in ServiceTitan (Settings > Integrations > API "
+                                "Application Access)." % self.creds.tenant_id,
+                           details={"problem": problem} if problem else None)
         if code == 404:
             raise ApiError("Not found (404) for %s" % url, status=code, body=body, url=url,
                            hint="Check the path (`servicetitan api endpoints --search ...`) and that the tenant id "

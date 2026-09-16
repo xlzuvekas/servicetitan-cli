@@ -16,7 +16,7 @@ job is dated to its EARLIEST FUTURE appointment, found by scanning all future
 appointments rather than trusting ``firstAppointmentId`` (a rescheduled job's
 first appointment sits in the past).
 
-STALE OPEN JOBS (Scheduled/InProgress/Hold with no future appointment) are
+STALE OPEN JOBS (Scheduled/Dispatched/InProgress/Hold with no future appointment) are
 excluded rather than counted as future revenue; the count is recorded.
 
 ACCOUNTS RECEIVABLE excludes invoices that carry a balance but no invoice
@@ -117,8 +117,11 @@ def pull_tenant(client, cfg, tenant, op_start, ar_start, max_pages=100, log=None
     out["technicians"] = [{"id": key(x["id"]), "name": x.get("name"), "loc": code,
                            "dept": bu_dept.get(x.get("businessUnitId")), "active": x.get("active")} for x in techs]
     employees = pages("settings/v2/employees", ANY, "employees")
+    # Technicians and employees are separate resources with independent ids. Job and estimate
+    # references (tech, soldBy) point at technicians, so technician names win on any id clash.
     people = {key(x["id"]): x.get("name") for x in techs}
-    people.update({key(x["id"]): x.get("name") for x in employees})
+    for x in employees:
+        people.setdefault(key(x["id"]), x.get("name"))
 
     try:
         job_types = pages("jpm/v2/job-types", ANY, "job-types")
@@ -129,8 +132,10 @@ def pull_tenant(client, cfg, tenant, op_start, ar_start, max_pages=100, log=None
 
     log("[%s] jobs..." % code)
     completed_jobs = pages("jpm/v2/jobs", {"jobStatus": "Completed", "completedOnOrAfter": op_start}, "jobs-completed")
+    # jobStatus values: Scheduled, Dispatched, InProgress, Hold, Completed, Canceled. Everything but
+    # Completed/Canceled is open work; a Dispatched job with a later appointment is still on the board.
     open_jobs = []
-    for status in ("Scheduled", "InProgress", "Hold"):
+    for status in ("Scheduled", "Dispatched", "InProgress", "Hold"):
         open_jobs += pages("jpm/v2/jobs", {"jobStatus": status, "createdOnOrAfter": op_start}, "jobs-%s" % status)
 
     now_iso = iso_z(dt.datetime.now(UTC))

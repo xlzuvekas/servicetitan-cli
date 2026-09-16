@@ -56,7 +56,9 @@ combined view. Record ids are prefixed with the tenant code (`SD:5510`).
 - `api get` needs exactly one tenant; pass `--tenant` when the profile has several.
 - Paths: `/jpm/v2/tenant/{tenant}/jobs`, or shorthand `jpm/v2/jobs`. The tenant
   id is filled in for you. Nothing is ever sent to another host.
-- Paged lists: `--all --max-pages N` follows `hasMore`. `pageSize` maximum is 500.
+- Paged lists: `--all --max-pages N` follows `hasMore`. `pageSize` defaults to 50 on the API (200 here);
+  the client caps it at 500. `ids=` filters take at most 50 ids. `active` filters take `True`, `Any`
+  or `False` (default: active records only).
 - Bulk feeds: `api get jpm/v2/export/jobs --export --from 2026-01-01`; keep the
   returned `continueFrom` to resume later.
 - Rate limit is 600 calls per 10 seconds per tenant; the client backs off on 429.

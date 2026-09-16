@@ -34,7 +34,7 @@ def fake_data():
         "business-units": [{"id": 1, "name": "HVAC Service", "active": True}, {"id": 2, "name": "Install Dept"},
                            {"id": 3, "name": "Warehouse"}],
         "technicians": [{"id": 10, "name": "Tech Ten", "businessUnitId": 1, "active": True}],
-        "employees": [{"id": 20, "name": "Office Person"}],
+        "employees": [{"id": 20, "name": "Office Person"}, {"id": 10, "name": "Clashing Employee"}],
         "job-types": [{"id": 5, "name": "No Cool"}],
         "jobs": {
             "Completed": [
@@ -46,9 +46,11 @@ def fake_data():
                 {"id": 200, "businessUnitId": 2, "total": 0, "estimateIds": [501], "customerId": 901},   # priced by sold estimate
                 {"id": 201, "businessUnitId": 2, "total": 5000, "estimateIds": []},                      # no future appt -> stale
             ],
+            "Dispatched": [{"id": 202, "businessUnitId": 1, "total": 275, "estimateIds": [], "customerId": 900}],
             "InProgress": [], "Hold": [],
         },
-        "appointments": [{"jobId": 200, "start": "2026-10-02T14:00:00Z"}, {"jobId": 200, "start": "2026-09-25T14:00:00Z"}],
+        "appointments": [{"jobId": 200, "start": "2026-10-02T14:00:00Z"}, {"jobId": 200, "start": "2026-09-25T14:00:00Z"},
+                         {"jobId": 202, "start": "2026-09-16T20:00:00Z"}],
         "appointment-assignments": [{"jobId": 100, "technicianId": 10, "technicianName": "Tech Ten"},
                                     {"jobId": 200, "technicianId": 77, "technicianName": "Old Employee"}],
         "customers": [{"id": 900, "name": "Cust Nine", "address": {"city": "Denver"}}],
@@ -107,7 +109,9 @@ def test_pull_tenant_applies_the_rules():
 
     jobs = {j["id"]: j for j in out["jobs"]}
     assert "SPR:101" not in jobs  # warehouse business unit dropped
-    assert set(jobs) == {"SPR:100", "SPR:200"}  # 201 had no future appointment -> stale, skipped
+    assert set(jobs) == {"SPR:100", "SPR:200", "SPR:202"}  # 201 had no future appointment -> stale, skipped
+    assert jobs["SPR:202"]["future"] is True and jobs["SPR:202"]["revenue"] == 275  # Dispatched jobs are open work
+    assert out["people"]["SPR:10"] == "Tech Ten"  # technician name wins over an employee with the same raw id
     assert out["stats"]["staleOpenJobsSkipped"] == 1
     completed = jobs["SPR:100"]
     assert completed["revenue"] == 120.0 and completed["tech"] == "SPR:10" and completed["lowTicket"] is True
@@ -155,5 +159,5 @@ def test_build_snapshot_merges_tenants(isolated_home, monkeypatch):
     ctx = Context()
     snap = build_snapshot(ctx, quiet=True, client_factory=lambda creds, **kw: FakeClient(fake_data()))
     assert snap["isDemo"] is False and snap["profile"] == "env" and snap["tenants"][0]["code"] == "MAIN"
-    assert len(snap["jobs"]) == 2 and snap["pulls"]["MAIN"]["completedJobs"] == 1 and snap["cli"]["version"]
+    assert len(snap["jobs"]) == 3 and snap["pulls"]["MAIN"]["completedJobs"] == 1 and snap["cli"]["version"]
     assert all(j["id"].startswith("MAIN:") for j in snap["jobs"])
