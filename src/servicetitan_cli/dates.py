@@ -137,6 +137,8 @@ def range_bounds(kind, as_of, custom_start=None, custom_end=None):
             raise ValueError("custom range needs a start date")
         start = start_of_day(custom_start)
         end = end_of_day(custom_end) if custom_end is not None else as_of
+        if end < start:
+            raise ValueError("custom range end (%s) is before its start (%s)" % (day_key(end), day_key(start)))
         return start, end
     raise ValueError("unknown range kind %r (choose from %s)" % (kind, ", ".join(RANGE_KINDS)))
 
@@ -149,17 +151,30 @@ def previous_comparable_range(start, end):
 
 
 def forward_range(kind, as_of, custom_end=None):
-    """Where the current period ends: rest of month/quarter/year, or the custom end.
+    """Where the period named by the range ends, for the "Rest of This Month"
+    and run-rate tiles. Calendar ranges project to the end of their calendar
+    period; rolling windows (last7 ...) end where they end, so their run rate is
+    simply the actual and there is no "rest of period".
 
-    Returns (end, label) matching the dashboard's "Rest of This Month" tiles.
+    Returns (end, label).
     """
     kind = (kind or "mtd").lower()
-    if kind in ("mtd", "today", "yesterday", "wtd", "last7", "last30", "last90"):
+    if kind == "mtd":
         return month_end(as_of), "This Month"
     if kind == "qtd":
         return quarter_end(as_of), "This Quarter"
     if kind == "ytd":
         return year_end(as_of), "This Year"
+    if kind == "wtd":
+        return end_of_day(as_of + dt.timedelta(days=6 - as_of.weekday())), "This Week"
+    if kind == "today":
+        return end_of_day(as_of), "Today"
+    if kind == "yesterday":
+        return end_of_day(as_of - dt.timedelta(days=1)), "Yesterday"
+    if kind in ("last7", "last30", "last90"):
+        return as_of, "Range"
+    if kind in ("next7", "next14", "next30", "next45", "next90"):
+        return end_of_day(as_of + dt.timedelta(days=int(kind[4:]))), "Range"
     end = end_of_day(custom_end) if custom_end is not None else end_of_day(as_of)
     return end, "Range"
 

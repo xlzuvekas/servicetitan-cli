@@ -160,6 +160,12 @@ def test_ranges_change_cohorts():
     assert r["kpis"]["restOfPeriod"]["ended"] is True
 
 
+def test_rolling_ranges_report_actuals_not_projections():
+    r = compute(query("last7"), "revenue")["kpis"]
+    assert r["runRate"]["periodComplete"] is True and r["runRate"]["value"] == r["completedRevenue"]
+    assert r["restOfPeriod"]["ended"] is True and r["restOfPeriod"]["revenue"] == 0
+
+
 def test_demo_invariants(demo_data):
     snap = Snapshot(demo_data, "demo.json")
     q = Query(snap, AS_OF, UTC, "ytd", targets=TARGETS, rules=RULES)

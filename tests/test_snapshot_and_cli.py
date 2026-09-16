@@ -101,6 +101,12 @@ def test_cli_errors_are_structured(capsys, isolated_home, demo_path):
     code, out, err = run_cli(capsys, "list", "jobs", "--data", demo_path, "--range", "custom")
     assert code == 2 and json.loads(err)["error"]["code"] == "USAGE"
 
+    code, out, err = run_cli(capsys, "metrics", "revenue", "--data", demo_path, "--start", "2026-06-30", "--end", "2026-06-01")
+    assert code == 2 and "before its start" in json.loads(err)["error"]["message"]
+
+    code, out, err = run_cli(capsys, "metrics", "service", "--data", demo_path, "--tenant", "NOPE")
+    assert code == 2 and "SPR" in json.loads(err)["error"]["hint"]
+
     code, out, err = run_cli(capsys, "palette", "#2996f4,#2a97f5")
     assert code == 6 and json.loads(err)["error"]["details"]["ok"] is False
 

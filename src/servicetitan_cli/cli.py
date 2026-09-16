@@ -355,11 +355,15 @@ def _query(ctx, args, allow_all=False):
                 raise UsageError("--end must be YYYY-MM-DD")
     elif kind == "custom":
         raise UsageError("--range custom needs --start")
-    q = Query(snap, ctx.as_of, ctx.tz, range_kind=(kind if kind != "all" else "ytd"), custom_start=start,
-              custom_end=end, tenant=_opt(args, "tenant"), targets=settings.get("targets"), rules=settings.get("rules"))
+    try:
+        q = Query(snap, ctx.as_of, ctx.tz, range_kind=(kind if kind != "all" else "ytd"), custom_start=start,
+                  custom_end=end, tenant=_opt(args, "tenant"), targets=settings.get("targets"), rules=settings.get("rules"))
+    except ValueError as e:
+        raise UsageError(str(e))
     q.use_range = kind != "all"
-    if _opt(args, "tenant") and str(args.tenant).lower() != "all" and ctx.source != "default":
-        ctx.select_tenants(args.tenant)
+    if q.tenant and q.tenant not in [c.upper() for c in snap.tenant_codes()]:
+        raise UsageError("Tenant %r is not in this snapshot" % q.tenant,
+                         hint="Tenants in %s: %s" % (snap.path, ", ".join(snap.tenant_codes()) or "(none)"))
     desc = snap.describe(as_of=ctx.as_of, max_age_hours=_opt(args, "max_age", 6.0))
     if desc["stale"]:
         if _opt(args, "require_fresh"):
@@ -774,8 +778,14 @@ def cmd_list(ctx, args):
         sort = "-" + sort
     if args.kind != "opportunities":
         filters.pop("date_field", None)
-    return list_records(q, args.kind, filters, limit=args.limit, sort=sort, fields=args.fields,
-                        count_only=args.count, use_range=q.use_range)
+    result = list_records(q, args.kind, filters, limit=args.limit, sort=sort, fields=args.fields,
+                          count_only=args.count, use_range=q.use_range)
+    if args.fields and result.get("records"):
+        unknown = [f for f in args.fields.split(",") if f.strip() and all(r.get(f.strip()) is None for r in result["records"])]
+        if unknown:
+            progress("warning: field(s) %s are empty for every record; check the names with `servicetitan list %s --limit 1`"
+                     % (", ".join(unknown), args.kind), ctx.quiet)
+    return result
 
 
 def cmd_api(ctx, args):

@@ -40,6 +40,9 @@ def test_custom_range_and_errors():
         range_bounds("custom", AS_OF)
     with pytest.raises(ValueError):
         range_bounds("fortnight", AS_OF)
+    with pytest.raises(ValueError):
+        range_bounds("custom", AS_OF, custom_start=dt.datetime(2026, 6, 30, tzinfo=DENVER),
+                     custom_end=dt.datetime(2026, 6, 1, tzinfo=DENVER))
 
 
 def test_previous_range_is_same_length_and_adjacent():
@@ -55,6 +58,9 @@ def test_forward_range_matches_dashboard_periods():
     assert forward_range("ytd", AS_OF)[0].month == 12
     end, label = forward_range("custom", AS_OF, custom_end=dt.datetime(2026, 10, 3, tzinfo=DENVER))
     assert end.day == 3 and label == "Range"
+    assert forward_range("last7", AS_OF) == (AS_OF, "Range")          # rolling windows have no forward part
+    assert forward_range("wtd", AS_OF)[0].weekday() == 6 and forward_range("wtd", AS_OF)[1] == "This Week"
+    assert forward_range("today", AS_OF)[0].day == 15 and forward_range("next7", AS_OF)[0].day == 22
 
 
 def test_granularity_and_buckets():
