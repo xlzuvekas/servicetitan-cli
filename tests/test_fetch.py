@@ -156,6 +156,26 @@ def test_pull_tenant_applies_the_rules():
     assert out["technicians"][0]["dept"] == "Service" and out["businessUnits"][2]["dept"] is None
 
 
+def test_build_snapshot_pulls_tenants_in_parallel(isolated_home, tmp_path):
+    from servicetitan_cli.config import Context
+    from servicetitan_cli.store import ProfileStore
+    from servicetitan_cli.secrets import SecretStore, secret_key
+    store = ProfileStore()
+    store.add("multi", company_name="Multi")
+    for code, tid in (("A", "1"), ("B", "2"), ("C", "3")):
+        store.add_tenant("multi", code, code, tid, "cid-" + code)
+        SecretStore("file").set(secret_key("multi", code, "clientSecret"), "s")
+        SecretStore("file").set(secret_key("multi", code, "appKey"), "k")
+        store.mark_secret("multi", code, "clientSecret")
+        store.mark_secret("multi", code, "appKey")
+    store.save()
+    ctx = Context(profile="multi")
+    snap = build_snapshot(ctx, quiet=True, client_factory=lambda creds, **kw: FakeClient(fake_data()), workers=3)
+    assert [t["code"] for t in snap["tenants"]] == ["A", "B", "C"]
+    assert sorted({j["loc"] for j in snap["jobs"]}) == ["A", "B", "C"] and len(snap["jobs"]) == 9
+    assert set(snap["pulls"]) == {"A", "B", "C"} and snap["poTotals"] == {"A": 3, "B": 3, "C": 3}
+
+
 def test_build_snapshot_merges_tenants(isolated_home, monkeypatch):
     from servicetitan_cli.config import Context
     monkeypatch.setenv("SERVICETITAN_TENANT_ID", "1")

@@ -41,6 +41,7 @@ CALLS are rolled up to one row per (day, agent, campaign, direction); the
 dashboard only shows counts, so this is lossless and much smaller.
 """
 import datetime as dt
+from concurrent.futures import ThreadPoolExecutor
 
 from . import __version__
 from .api import ServiceTitanClient
@@ -358,8 +359,14 @@ def pull_tenant(client, cfg, tenant, op_start, ar_start, max_pages=100, log=None
     return out
 
 
-def build_snapshot(ctx, tenants=None, max_pages=100, page_size=None, quiet=False, client_factory=None):
-    """Pull every (or the selected) tenant and merge into one snapshot dict."""
+def build_snapshot(ctx, tenants=None, max_pages=100, page_size=None, quiet=False, client_factory=None, workers=4):
+    """Pull every (or the selected) tenant and merge into one snapshot dict.
+
+    Tenants are pulled concurrently (``workers`` at a time): ServiceTitan's
+    rate limit is per application *per tenant*, so parallel tenants do not
+    compete for one budget. Credentials are resolved up front, before any
+    thread starts, so keyring access stays on the main thread.
+    """
     cfg = ctx.config
     tenants = tenants or ctx.tenants
     log = (lambda m: None) if quiet else (lambda m: _progress(m))
@@ -371,11 +378,19 @@ def build_snapshot(ctx, tenants=None, max_pages=100, page_size=None, quiet=False
                    "campaigns", "calls", "memberships")
     merged = {k: [] for k in collections}
     people, po_totals, raw_calls, est_count, pulls = {}, {}, 0, 0, {}
-    for t in tenants:
+
+    def pull_one(t):
         c = creds[t["code"]]
         client = (client_factory or ServiceTitanClient)(c, page_size=page_size or 200, progress=log)
         log("[%s] authenticating (%s, tenant %s)..." % (c.code, c.environment, c.tenant_id))
-        res = pull_tenant(client, cfg, t, op_start, ar_start, max_pages=max_pages, log=log)
+        return pull_tenant(client, cfg, t, op_start, ar_start, max_pages=max_pages, log=log)
+
+    if len(tenants) > 1 and workers and workers > 1:
+        with ThreadPoolExecutor(max_workers=min(workers, len(tenants))) as pool:
+            results = list(pool.map(pull_one, tenants))
+    else:
+        results = [pull_one(t) for t in tenants]
+    for t, res in zip(tenants, results):
         for k in collections:
             merged[k] += res[k]
         people.update(res["people"])

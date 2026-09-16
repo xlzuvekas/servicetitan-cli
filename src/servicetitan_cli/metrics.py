@@ -569,7 +569,7 @@ DEFINITIONS = {
         "installers": "Completed revenue in the range versus revenue scheduled inside the board window, seeded with every Install technician so idle crew still appear.",
     },
     "accounting": {
-        "totalAR": "Balances on invoices that carry an invoice date. Balances on undated (not yet issued) invoices are excluded because they are unbilled future work.",
+        "totalAR": "Balances on invoices that carry an invoice date, as of the snapshot's generatedAt: ServiceTitan only exposes the current balance, so --as-of moves the aging clock but cannot rewind balances. Balances on undated (not yet issued) invoices are excluded because they are unbilled future work.",
         "arAging": "Days past the due date (falling back to the invoice date), bucketed 0-30/31-60/61-90/91-120/120+.",
         "committedOnOpenPOs": "Total of purchase orders in Pending, Sent or PartiallyReceived status (Received, Exported and Canceled are closed). This is committed spend, not accounts payable; vendor bills are available live via `servicetitan api accounting ap-bills list` and are not in the snapshot.",
     },

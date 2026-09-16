@@ -179,6 +179,7 @@ def build_parser():
                    help="skip the pull when the existing snapshot is younger than this")
     x.add_argument("--max-pages", type=int, default=100, help="page cap per collection (default %(default)s)")
     x.add_argument("--page-size", type=int, default=200, help="records per page, max 500 (default %(default)s)")
+    x.add_argument("--workers", type=int, default=4, help="tenants pulled concurrently (rate limits are per tenant; default %(default)s)")
     x.add_argument("--out", metavar="PATH", help="write here instead of the profile's snapshot path")
     x = _sub(sub, "demo", "write a synthetic snapshot to try every command offline")
     x.add_argument("--out", metavar="PATH", help="default: the profile's snapshot path (or ./demo_data.json without a profile)")
@@ -652,7 +653,8 @@ def cmd_fetch(ctx, args):
         except DataError:
             pass
     tenants = ctx.select_tenants(_opt(args, "tenant"))
-    snapshot = build_snapshot(ctx, tenants=tenants, max_pages=args.max_pages, page_size=args.page_size, quiet=ctx.quiet)
+    snapshot = build_snapshot(ctx, tenants=tenants, max_pages=args.max_pages, page_size=args.page_size, quiet=ctx.quiet,
+                              workers=args.workers)
     partial = len(tenants) != len(ctx.tenants)
     if partial and os.path.exists(out_path):
         # Merge a single-tenant refresh into the existing multi-tenant snapshot.
