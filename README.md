@@ -120,7 +120,15 @@ servicetitan api endpoints --search "technician rating"      # search when you d
 ```
 
 Module aliases work (`sales` for `salestech`, `jobs` for `jpm`, `calls` for
-`telecom`). Parameters are the spec's own names in kebab case; enum values are
+`telecom`). Where ServiceTitan serves several versions of an operation, the
+newest has the plain name and older ones a suffix (`telecom calls list` is v3,
+`list-v2` the deprecated v2 list); `--describe` shows `deprecated` and
+`replacedBy`. The tree is generated from a dated snapshot of ServiceTitan's
+OpenAPI documents: `servicetitan api catalogue status` shows the date,
+`servicetitan api catalogue refresh` downloads the current documents (kept in
+the config directory, taking precedence) and reports every added, removed or
+changed operation, parameter, enum value, field and scope; `reset` returns to
+the packaged copy. Parameters are the spec's own names in kebab case; enum values are
 matched case-insensitively and sent with the spec's spelling. Paged operations
 take `--all`, `--max-pages` and `--count`; export feeds take `--from` and
 `--max-batches`; everything takes `--fields` and `--raw`. `api get <path>` is

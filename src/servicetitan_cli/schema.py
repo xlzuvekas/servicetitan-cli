@@ -77,6 +77,8 @@ def _api_tree():
         tree.append({"module": m["module"], "title": m.get("title"), "aliases": m.get("aliases") or [], "resources": res})
     return {"grammar": "servicetitan api <module> <resource> <operation> [PATH-ARGS] [--query-options] [--all|--count|--fields|--raw|--describe]",
             "note": "Reads execute; writes are discoverable only. `--describe` returns the operation's parameters, types, enums and response fields.",
+            "catalogue": {"origin": doc.get("_origin"), "generatedAt": doc.get("generatedAt"),
+                          "refresh": "servicetitan api catalogue refresh (downloads ServiceTitan's current OpenAPI documents into the config dir; status/reset also available)"},
             "operations": doc["count"], "reads": doc["readCount"], "modules": tree}
 
 

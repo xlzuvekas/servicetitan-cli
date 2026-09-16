@@ -77,6 +77,8 @@ def build_parser(op, add_common=None, prog=None):
         extra.append("record fields: %s" % ", ".join(op["fields"][:40]) + (" ..." if len(op["fields"]) > 40 else ""))
     if extra:
         desc.append("\n".join(extra))
+    if op.get("deprecated"):
+        desc.append("DEPRECATED by ServiceTitan; prefer the newer version of this operation (see --describe replacedBy).")
     if op["method"] != "GET":
         desc.append("WRITE OPERATION: listed for discovery only; this read-only tool never executes it.")
     parser = argparse.ArgumentParser(prog=prog or "servicetitan api %s %s %s" % (op["module"], op["resource"], op["operation"]),
@@ -195,14 +197,16 @@ def overview():
             "note": "GET operations run against ServiceTitan; write operations are listed for discovery only. "
                     "Add --help at any level for a readable version, --describe on an operation for its contract.",
             "builtins": {"get": "GET any path directly", "endpoints": "search operations by words",
-                         "modules": "module list"},
+                         "modules": "module list", "catalogue": "status | refresh | reset of the operation catalogue"},
+            "catalogue": {k: v for k, v in endpoints.info().items() if k != "modules"},
             "modules": endpoints.modules()}
 
 
 def module_overview(module):
     meta = next(m for m in endpoints.catalogue()["modules"] if m["module"] == module)
     return {"source": "catalogue", "module": module, "title": meta.get("title"), "description": meta.get("description"),
-            "aliases": meta.get("aliases") or [], "resources": endpoints.resources(module),
+            "aliases": meta.get("aliases") or [], "versions": meta.get("versions") or [],
+            "resources": endpoints.resources(module),
             "next": "servicetitan api %s <resource>" % module}
 
 
@@ -232,6 +236,8 @@ def overview_text(data):
         lines.append("%s %s: operations (servicetitan api %s %s <operation> --help):\n" % (data["module"], data["resource"], data["module"], data["resource"]))
         for o in data["operations"]:
             flag = "" if o["executable"] else "  (write, disabled)"
+            if o.get("deprecated"):
+                flag += "  (deprecated)"
             lines.append("  %-28s %-6s %s%s" % (o["operation"], o["method"], o["path"], flag))
             if o.get("summary"):
                 lines.append("  %-28s        %s" % ("", o["summary"]))

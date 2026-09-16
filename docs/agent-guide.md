@@ -65,7 +65,10 @@ servicetitan api jpm jobs get 12345 --fields jobNumber,total,jobStatus
 servicetitan api endpoints --search "words"   # when the module is unknown
 ```
 
-- Every response carries `source`: `snapshot` (metrics/list) or `live` (api).
+- Every response carries `source`: `snapshot` (metrics/list), `live` (api) or `catalogue` (discovery).
+- `servicetitan api catalogue status` tells you how old the operation catalogue is; `refresh` updates it
+  from ServiceTitan's current OpenAPI documents and lists what changed. Operations with `deprecated: true`
+  in `--describe` name their replacement in `replacedBy`.
 - `api ...` needs exactly one tenant; pass `--tenant` when the profile has several.
 - `api get <path>` still exists for a raw path (`jpm/v2/jobs` shorthand or the
   documented form). The tenant id is filled in. Nothing is ever sent to another host.

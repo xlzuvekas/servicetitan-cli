@@ -1,6 +1,7 @@
 {
 "source":"https://developer.servicetitan.io/api/docs/apis/<api-id> (OpenAPI 3.1)",
-"generatedFrom":"scripts/build_endpoint_catalogue.py",
+"generatedFrom":"servicetitan_cli.catalogue",
+"generatedAt":"2026-09-16T02:12:02Z",
 "count":600,
 "readCount":330,
 "modules":[
@@ -12,6 +13,10 @@
 "prefix":"/accounting/v2",
 "aliases":[
 "acc"
+],
+"hash":"f7f896b1db8303df",
+"versions":[
+"v2"
 ]
 },
 {
@@ -20,7 +25,11 @@
 "title":"CRM",
 "description":"Bookings, bookings provider tags, contacts, customers, leads, locations, tags",
 "prefix":"/crm/v2",
-"aliases":[]
+"aliases":[],
+"hash":"bfa3605032a2a079",
+"versions":[
+"v2"
+]
 },
 {
 "module":"customer-interactions",
@@ -30,6 +39,10 @@
 "prefix":"/customer-interactions/v2",
 "aliases":[
 "ratings"
+],
+"hash":"da75c5b087d711ac",
+"versions":[
+"v2"
 ]
 },
 {
@@ -40,6 +53,10 @@
 "prefix":"/dispatch/v2",
 "aliases":[
 "dis"
+],
+"hash":"a4330198c0600e75",
+"versions":[
+"v2"
 ]
 },
 {
@@ -48,7 +65,11 @@
 "title":"Equipment Systems",
 "description":"Equipment types, installed equipment, installed equipment systems",
 "prefix":"/equipmentsystems/v2",
-"aliases":[]
+"aliases":[],
+"hash":"f74aed14c55652c7",
+"versions":[
+"v2"
+]
 },
 {
 "module":"findings",
@@ -56,7 +77,11 @@
 "title":"Findings",
 "description":"Finding assets, location findings",
 "prefix":"/findings/v2",
-"aliases":[]
+"aliases":[],
+"hash":"2123f498ba74b1e6",
+"versions":[
+"v2"
+]
 },
 {
 "module":"fleet-pro",
@@ -64,7 +89,11 @@
 "title":"Fleet Pro",
 "description":"",
 "prefix":"/fleetpro/v2",
-"aliases":[]
+"aliases":[],
+"hash":"9b6ee3079310d390",
+"versions":[
+"v2"
+]
 },
 {
 "module":"forms",
@@ -72,7 +101,11 @@
 "title":"Forms",
 "description":"Forms, form submissions, job forms",
 "prefix":"/forms/v2",
-"aliases":[]
+"aliases":[],
+"hash":"1b502281e11036be",
+"versions":[
+"v2"
+]
 },
 {
 "module":"inventory",
@@ -82,6 +115,10 @@
 "prefix":"/inventory/v2",
 "aliases":[
 "inv"
+],
+"hash":"56478e778a2e88e8",
+"versions":[
+"v2"
 ]
 },
 {
@@ -90,7 +127,11 @@
 "title":"Job Booking",
 "description":"Call reasons",
 "prefix":"/jbce/v2",
-"aliases":[]
+"aliases":[],
+"hash":"1bd225b5904513cb",
+"versions":[
+"v2"
+]
 },
 {
 "module":"jpm",
@@ -100,6 +141,10 @@
 "prefix":"/jpm/v2",
 "aliases":[
 "jobs"
+],
+"hash":"2e76d534ef76d284",
+"versions":[
+"v2"
 ]
 },
 {
@@ -110,6 +155,10 @@
 "prefix":"/marketing/v2",
 "aliases":[
 "mrk"
+],
+"hash":"4dd9029f6765cb31",
+"versions":[
+"v2"
 ]
 },
 {
@@ -118,7 +167,11 @@
 "title":"Marketing Ads",
 "description":"Attributed leads, attribution lookup, capacity warnings, external call attributions, job attributions, performance, web booking attributions, web lead form attributions",
 "prefix":"/marketingads/v2",
-"aliases":[]
+"aliases":[],
+"hash":"4aea671e84747b94",
+"versions":[
+"v2"
+]
 },
 {
 "module":"marketing-reputation",
@@ -126,7 +179,11 @@
 "title":"Marketing Reputation",
 "description":"Marketing reviews",
 "prefix":"/marketingreputation/v2",
-"aliases":[]
+"aliases":[],
+"hash":"8db79ce485d2f92f",
+"versions":[
+"v2"
+]
 },
 {
 "module":"memberships",
@@ -136,6 +193,10 @@
 "prefix":"/memberships/v2",
 "aliases":[
 "mem"
+],
+"hash":"fc468a67b87279ec",
+"versions":[
+"v2"
 ]
 },
 {
@@ -144,7 +205,11 @@
 "title":"Payroll",
 "description":"Activity codes, employee payrolls, gross pay items, non-job timesheets, payrolls, payroll adjustments, payroll jobs, payroll locations, payroll settings, technician payrolls, timesheet codes",
 "prefix":"/payroll/v2",
-"aliases":[]
+"aliases":[],
+"hash":"bed52fbfaee998e1",
+"versions":[
+"v2"
+]
 },
 {
 "module":"pricebook",
@@ -154,6 +219,10 @@
 "prefix":"/pricebook/v2",
 "aliases":[
 "pb"
+],
+"hash":"086b0bbd1f029aa2",
+"versions":[
+"v2"
 ]
 },
 {
@@ -162,7 +231,11 @@
 "title":"Reporting",
 "description":"Dynamic value sets, reports, report categories",
 "prefix":"/reporting/v2",
-"aliases":[]
+"aliases":[],
+"hash":"7b8d34220cf5338a",
+"versions":[
+"v2"
+]
 },
 {
 "module":"salestech",
@@ -173,6 +246,10 @@
 "aliases":[
 "sales",
 "estimates"
+],
+"hash":"bc3d3f2c83c1f6d5",
+"versions":[
+"v2"
 ]
 },
 {
@@ -181,7 +258,11 @@
 "title":"Scheduling Pro",
 "description":"Schedulers",
 "prefix":"/schedulingpro/v2",
-"aliases":[]
+"aliases":[],
+"hash":"730f50bda61d2c03",
+"versions":[
+"v2"
+]
 },
 {
 "module":"service-agreements",
@@ -189,7 +270,11 @@
 "title":"Service Agreements",
 "description":"Service agreements",
 "prefix":"/service-agreements/v2",
-"aliases":[]
+"aliases":[],
+"hash":"9476d1235fba03f1",
+"versions":[
+"v2"
+]
 },
 {
 "module":"settings",
@@ -199,6 +284,10 @@
 "prefix":"/settings/v2",
 "aliases":[
 "stt"
+],
+"hash":"0d7da05209cb9f6b",
+"versions":[
+"v2"
 ]
 },
 {
@@ -207,7 +296,11 @@
 "title":"Task Management",
 "description":"Tasks, task management data",
 "prefix":"/taskmanagement/v2",
-"aliases":[]
+"aliases":[],
+"hash":"9e085ef54e60ac55",
+"versions":[
+"v2"
+]
 },
 {
 "module":"telecom",
@@ -218,6 +311,11 @@
 "aliases":[
 "calls",
 "tlc"
+],
+"hash":"671279d9192cad45",
+"versions":[
+"v2",
+"v3"
 ]
 },
 {
@@ -226,7 +324,11 @@
 "title":"Timesheets",
 "description":"Activities, activity categories, activity types",
 "prefix":"/timesheets/v2",
-"aliases":[]
+"aliases":[],
+"hash":"4142ddb013ad1b37",
+"versions":[
+"v2"
+]
 }
 ],
 "operations":[
@@ -35114,7 +35216,8 @@
 "leadCall",
 "projectId",
 "type"
-]
+],
+"deprecated":true
 },
 {
 "module":"telecom",

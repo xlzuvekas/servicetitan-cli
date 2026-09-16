@@ -807,7 +807,13 @@ def _api_builtin_parser(name):
         p.add_argument("--fields", action="store_true", help="include response record fields")
         p.add_argument("--limit", type=int, default=50)
     elif name == "modules":
-        p.description = "List API modules with operation counts."
+        p.description = "List API modules with operation counts and API versions."
+    elif name == "catalogue":
+        p.description = ("The operation catalogue is built from ServiceTitan's OpenAPI documents. The package ships one; "
+                         "`refresh` downloads the current documents from the developer portal into the config directory "
+                         "(which then takes precedence) and reports what changed; `reset` returns to the packaged copy.")
+        p.add_argument("action", choices=("status", "refresh", "reset"))
+        p.add_argument("--dry-run", action="store_true", help="refresh: report the differences without saving")
     return p
 
 
@@ -824,13 +830,41 @@ def cmd_api(ctx, args):
             return None
         return data
     head = rest[0]
-    if head in ("get", "endpoints", "modules"):
+    if head in ("get", "endpoints", "modules", "catalogue"):
         sub = _api_builtin_parser(head).parse_args(rest[1:])
         for k, v in vars(sub).items():
             if k not in vars(args) or v not in (None, False):
                 setattr(args, k, v)
         if head == "modules":
-            return {"source": "catalogue", "modules": ep.modules()}
+            return {"source": "catalogue", "catalogue": {k: v for k, v in ep.info().items() if k != "modules"},
+                    "modules": ep.modules()}
+        if head == "catalogue":
+            from . import catalogue as cat
+            if sub.action == "status":
+                packaged = ep.packaged()
+                active = ep.info()
+                out = {"source": "catalogue", "active": active,
+                       "packaged": {"generatedAt": packaged.get("generatedAt"), "operations": packaged.get("count"),
+                                    "reads": packaged.get("readCount")},
+                       "localPath": cat.local_path(), "localPresent": os.path.exists(cat.local_path())}
+                if active["origin"] == "local":
+                    out["diffFromPackaged"] = cat.diff(packaged, ep.catalogue())["summary"]
+                out["hint"] = "servicetitan api catalogue refresh [--dry-run] downloads the current OpenAPI documents; reset returns to the packaged copy"
+                return out
+            if sub.action == "reset":
+                removed = cat.remove_local()
+                ep.reload()
+                return {"source": "catalogue", "removed": removed, "active": ep.info()}
+            progress("downloading the current OpenAPI documents from %s ..." % cat.PORTAL, ctx.quiet)
+            fresh = cat.build_from_portal(progress=lambda m: progress("   " + m, ctx.quiet))
+            delta = cat.diff(ep.catalogue(), fresh)
+            out = {"source": "catalogue", "dryRun": bool(sub.dry_run), "generatedAt": fresh["generatedAt"],
+                   "operations": fresh["count"], "reads": fresh["readCount"], "diff": delta}
+            if not sub.dry_run:
+                out["saved"] = cat.save_local(fresh)
+                ep.reload()
+                out["active"] = {k: v for k, v in ep.info().items() if k != "modules"}
+            return out
         if head == "endpoints":
             rows = ep.search(sub.search, sub.module, exports_only=sub.exports, include_fields=sub.fields, limit=sub.limit,
                              methods=None if sub.all_methods else ("GET",))

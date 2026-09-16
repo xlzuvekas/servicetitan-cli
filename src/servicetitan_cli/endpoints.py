@@ -7,6 +7,7 @@ GET operations execute, because this tool is read-only.
 """
 import difflib
 import json
+import os
 import pkgutil
 
 from .errors import UsageError
@@ -14,17 +15,54 @@ from .errors import UsageError
 _CACHE = {}
 
 
+def packaged():
+    """The catalogue that ships with this release."""
+    raw = pkgutil.get_data("servicetitan_cli", "data/endpoints.json")
+    return json.loads(raw.decode("utf-8")) if raw else {"count": 0, "readCount": 0, "modules": [], "operations": []}
+
+
+def _load():
+    """A locally refreshed catalogue (`servicetitan api catalogue refresh`) beats the packaged one."""
+    from .catalogue import local_path
+    path = local_path()
+    if os.path.exists(path):
+        try:
+            with open(path, encoding="utf-8") as f:
+                doc = json.load(f)
+            if isinstance(doc, dict) and doc.get("operations"):
+                return doc, "local", path
+        except (OSError, ValueError):
+            pass
+    return packaged(), "packaged", None
+
+
+def _index(doc):
+    index = {}
+    for op in doc["operations"]:
+        index.setdefault(op["module"], {}).setdefault(op["resource"], {})[op["operation"]] = op
+    doc["_index"] = index
+    doc["_by_path"] = {(op["path"], op["method"]): op for op in doc["operations"]}
+    return doc
+
+
 def catalogue():
     if "doc" not in _CACHE:
-        raw = pkgutil.get_data("servicetitan_cli", "data/endpoints.json")
-        doc = json.loads(raw.decode("utf-8")) if raw else {"count": 0, "modules": [], "operations": []}
-        index = {}
-        for op in doc["operations"]:
-            index.setdefault(op["module"], {}).setdefault(op["resource"], {})[op["operation"]] = op
-        doc["_index"] = index
-        doc["_by_path"] = {(op["path"], op["method"]): op for op in doc["operations"]}
-        _CACHE["doc"] = doc
+        doc, origin, path = _load()
+        doc["_origin"] = origin
+        doc["_path"] = path
+        _CACHE["doc"] = _index(doc)
     return _CACHE["doc"]
+
+
+def reload():
+    _CACHE.clear()
+
+
+def info():
+    doc = catalogue()
+    return {"origin": doc["_origin"], "path": doc.get("_path"), "generatedAt": doc.get("generatedAt"),
+            "operations": doc.get("count"), "reads": doc.get("readCount"),
+            "modules": [{"module": m["module"], "versions": m.get("versions") or [], "hash": m.get("hash")} for m in doc["modules"]]}
 
 
 # ---------------------------------------------------------------- discovery
@@ -34,7 +72,8 @@ def modules():
     for m in doc["modules"]:
         ops = [o for o in doc["operations"] if o["module"] == m["module"]]
         out.append({"module": m["module"], "title": m.get("title"), "description": m.get("description"),
-                    "aliases": m.get("aliases") or [], "resources": len(doc["_index"].get(m["module"], {})),
+                    "aliases": m.get("aliases") or [], "versions": m.get("versions") or [],
+                    "resources": len(doc["_index"].get(m["module"], {})),
                     "operations": len(ops), "reads": sum(1 for o in ops if o["method"] == "GET"),
                     "writes": sum(1 for o in ops if o["method"] != "GET")})
     return out
@@ -96,9 +135,14 @@ def operations(module, resource):
     out = []
     for name in sorted(ops, key=lambda n: (ops[n]["method"] != "GET", n)):
         o = ops[name]
-        out.append({"operation": name, "method": o["method"], "path": o["path"], "summary": o.get("summary"),
-                    "scope": o.get("scope"), "kind": o.get("kind"), "executable": o["method"] == "GET",
-                    "pathParams": [p["name"] for p in o.get("params", []) if p["in"] == "path"]})
+        item = {"operation": name, "method": o["method"], "path": o["path"], "summary": o.get("summary"),
+                "scope": o.get("scope"), "kind": o.get("kind"), "executable": o["method"] == "GET",
+                "pathParams": [p["name"] for p in o.get("params", []) if p["in"] == "path"]}
+        if o.get("version"):
+            item["version"] = o["version"]
+        if o.get("deprecated"):
+            item["deprecated"] = True
+        out.append(item)
     return out
 
 
@@ -129,6 +173,12 @@ def describe(op):
         out["requestBody"] = op["body"]
     if op.get("version"):
         out["version"] = op["version"]
+    if op.get("deprecated"):
+        out["deprecated"] = True
+        newer = [n for n, o in catalogue()["_index"].get(op["module"], {}).get(op["resource"], {}).items()
+                 if o["method"] == op["method"] and not o.get("deprecated") and n.split("-v")[0] == op["operation"].split("-v")[0]]
+        if newer:
+            out["replacedBy"] = sorted(newer)
     return out
 
 
