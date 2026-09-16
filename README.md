@@ -1,235 +1,218 @@
-# ServiceTitan Operations Dashboard
+# servicetitan-cli
 
-A single-file operations dashboard that reads your ServiceTitan account and
-renders eight tabs — Revenue, Service, Sales, Installation, Accounting,
-Marketing, Office and Memberships — across one or many locations.
+A read-only ServiceTitan command-line tool built for AI agents and the people
+who work with them.
 
-The output is **one self-contained HTML file**. No server, no build step, no
-database. Open it from disk, email it, or drop it on any static host.
+- **Multi-tenant.** One machine can hold many companies (*profiles*), each with
+  one or more ServiceTitan accounts (*tenants*). `--profile viking --tenant TUC`.
+- **Secrets stay out of files.** Client secrets and app keys go to the OS
+  credential store (Windows Credential Manager, macOS Keychain, Linux Secret
+  Service). Where no keyring exists they go to an owner-only file, and the CLI
+  says so.
+- **JSON in, JSON out.** Every command prints one JSON document; errors are JSON
+  envelopes with stable codes and exit statuses; nothing prompts unless a person
+  is at a terminal. `servicetitan schema` describes the whole tool in one call.
+- **Derived metrics, not just raw records.** Revenue, average ticket, close
+  rate, AR aging, booking rate, membership attach and more, computed the way the
+  bundled dashboard computes them, with `--explain` definitions.
+- **Every ServiceTitan endpoint, read-only.** `servicetitan api get` reaches any
+  of the 330 GET operations in ServiceTitan's public API, with paging and export
+  continuation handled, and a searchable catalogue generated from the official
+  OpenAPI documents.
+- **The dashboard is still here.** `servicetitan render` writes the same
+  single-file operations dashboard the template produced.
 
-**It only ever reads.** Every ServiceTitan call is a `GET`. Nothing is written
-back to your account, ever.
+It only ever reads. Every ServiceTitan call is a `GET`; the only `POST` is the
+OAuth token exchange with ServiceTitan's auth server.
 
----
-
-## Quick look, before you connect anything
-
-You can see the whole thing working on synthetic data in under a minute:
-
-```bash
-pip install requests
-cp config.example.json config.json
-python generate_demo_data.py
-python render_dashboard.py --demo
-```
-
-Open `dashboard.html`. Every tab, filter and drill-down works. The figures are
-randomly generated and the page says so in a banner across the top.
-
----
-
-## Setup
-
-### Step 1: configure
+## Install
 
 ```bash
-cp config.example.json config.json
+pip install git+https://github.com/xlzuvekas/servicetitan-cli
+servicetitan --version
 ```
 
-Open `config.json` and set:
+Python 3.9 or newer. Windows, macOS and Linux. `pipx install` works too.
 
-- **`company.name`** and **`company.subtitle`** — what appears in the header.
-- **`locations`** — one entry per ServiceTitan tenant. `code` is a short unique
-  id, `label` is what people see, `env` is the suffix on that location's `.env`
-  keys. **One location can omit `env`** and use the unsuffixed keys; with more
-  than one, each needs its own. A single-location shop lists one entry and the
-  location toggle hides itself.
-- **`departmentMapping`** — how your business-unit names map to departments.
-  **Check this one.** It matches keywords against your business-unit names, and
-  the defaults assume names containing "install", "service", "maint" and so on.
-  `test_connection.py` prints exactly how each of your units gets classified.
-- **`targets`** — the target lines on the Service tab. Set any to `null` to
-  hide that line rather than show a target nobody agreed to.
-
-### Step 2: connect ServiceTitan
+## Try it in one minute, no credentials
 
 ```bash
-cp .env.example .env
+servicetitan demo --out demo.json            # synthetic snapshot, two tenants
+servicetitan metrics service --data demo.json --range mtd
+servicetitan list invoices --data demo.json --min-days-past-due 60 --sort=-balance
+servicetitan render --data demo.json --out dashboard.html   # open it in a browser
 ```
 
-Four values are needed. In the
-[ServiceTitan developer portal](https://developer.servicetitan.io):
+Demo output is flagged `isDemo: true` everywhere and the dashboard shows a banner.
 
-1. Create an app (or open an existing one).
-2. **Client ID** and **Client Secret** come from the app's credentials. The
-   secret is shown **once** — generate a new one if you lose it.
-3. **App Key** is on the app page. It is the same for every tenant your app is
-   connected to.
-4. **Tenant ID** is per account — Settings → Integrations, or the URL when
-   signed in to that tenant.
-5. Grant **read** scopes for: Job Planning & Management, Accounting, Sales &
-   Estimates, Marketing, Telecom, Inventory, Memberships, CRM, Dispatch and
-   Settings. Read-only is all this needs.
+## Connect a company
 
-#### Naming the keys
-
-Each credential can be set once for everybody, or per location:
-
-```
-SERVICETITAN_APP_KEY              shared — every location uses it
-SERVICETITAN_APP_KEY_SPRINGFIELD  only the location whose env is SPRINGFIELD
-```
-
-A location's own key wins; the unsuffixed key is the fallback. So:
-
-**One location** — fill in the four unsuffixed keys, delete the per-location
-section of `.env`, and leave `env` out of `config.json`:
-
-```
-SERVICETITAN_APP_KEY=...
-SERVICETITAN_CLIENT_ID=...
-SERVICETITAN_CLIENT_SECRET=...
-SERVICETITAN_TENANT_ID=...
-```
-
-**Several locations** — set the app key once, since it belongs to your app
-rather than to a tenant, and suffix the three that genuinely differ:
-
-```
-SERVICETITAN_APP_KEY=...
-
-SERVICETITAN_CLIENT_ID_SPRINGFIELD=...
-SERVICETITAN_CLIENT_SECRET_SPRINGFIELD=...
-SERVICETITAN_TENANT_ID_SPRINGFIELD=...
-
-SERVICETITAN_CLIENT_ID_LOCATION_2=...
-SERVICETITAN_CLIENT_SECRET_LOCATION_2=...
-SERVICETITAN_TENANT_ID_LOCATION_2=...
-```
-
-Growing from one location to two is then: add the suffixed keys for both, and
-add `env` to both entries in `config.json`. The shared app key stays put.
-
-Then check it:
+You need four values per tenant: **app key**, **client id**, **client secret**
+and **tenant id**. [docs/setup-servicetitan-api-access.md](docs/setup-servicetitan-api-access.md)
+walks through getting them from the developer portal and ServiceTitan settings
+(about ten minutes, done once per company). `servicetitan init` prints the same
+steps and tells you what is still missing on this machine.
 
 ```bash
-python test_connection.py
+servicetitan profile add acme --company "Acme Home Services" --timezone America/Denver --use
+printf '%s\n%s\n' "$CLIENT_SECRET" "$APP_KEY" | \
+  servicetitan tenant add acme --code MAIN --label "Main Office" \
+      --tenant-id 123456789 --client-id cid.xxxx --client-secret-stdin --app-key-stdin
+servicetitan auth check
 ```
 
-This authenticates each location, reads your business units, and shows how each
-one will be classified. Fix any classification surprises in `config.json` now —
-they are much harder to spot later as odd totals.
+`tenant add` test-authenticates and shows how each business unit will be
+classified. At a terminal you can omit the secret flags and paste when prompted;
+secrets given with `--client-secret-env VAR` or on stdin never touch shell history.
 
-### Step 3: pull and render
+A second location that is its own ServiceTitan tenant is one more `tenant add`
+(the app key is reused from the first tenant automatically). A company with one
+tenant and many business units needs only one.
+
+Already set up with the dashboard template's `config.json` + `.env`? Run
+`servicetitan profile import acme --use` in that folder: it moves the secrets
+into the keyring and keeps your mapping, targets and rules. The legacy layout also
+keeps working as is (`servicetitan fetch` in that directory reads `config.json`
+and `.env` and writes `live_data.json`).
+
+No profile at all? Plain environment variables work for CI and sandboxes:
+`SERVICETITAN_TENANT_ID`, `SERVICETITAN_CLIENT_ID`, `SERVICETITAN_CLIENT_SECRET`,
+`SERVICETITAN_APP_KEY` (plus `SERVICETITAN_TIMEZONE`, `SERVICETITAN_ENVIRONMENT`).
+
+## Daily use
 
 ```bash
-python fetch_dashboard_data.py     # writes live_data.json  (a few minutes)
-python render_dashboard.py         # writes dashboard.html
+servicetitan fetch --max-age 6        # pull a snapshot unless one is younger than 6h
+servicetitan status                   # profile, tenants, snapshot age and counts
+servicetitan metrics all --explain    # every area, with what each number means
+servicetitan metrics sales --range qtd --tenant TUC
+servicetitan list jobs --range next7 --booked --fields jobNumber,date,customer,revenue
+servicetitan list memberships --renews-within 30
+servicetitan api get jpm/v2/appointments --param startsOnOrAfter=2026-09-16T00:00:00Z --all
+servicetitan render --out dashboard.html
 ```
 
-Open `dashboard.html`.
+Snapshots live in the CLI's config directory (`servicetitan status` shows the
+path). Every query answer carries `snapshot.generatedAt`, `ageHours` and
+`stale`, so an agent can decide to fetch first; `--require-fresh` makes a stale
+snapshot an error instead of a warning.
 
-### Step 4: make it yours
+### Commands
 
-See **[BRANDING.md](BRANDING.md)** for logos, colours and type. The default
-theme is deliberately neutral so it looks considered before you touch it.
+| Command | What it does |
+|---|---|
+| `profile list/show/add/remove/use/set/import/export` | Companies and their dashboard settings. `export` prints a shareable config with no ids or secrets. |
+| `tenant list/add/update/set-secret/remove` | ServiceTitan accounts inside a profile, with secret storage. |
+| `auth check` | Authenticate every tenant; preview business-unit classification. |
+| `status` | Profile summary plus snapshot freshness and record counts. Cheap; run first. |
+| `fetch` | Pull a snapshot (read-only). `--max-age`, `--tenant` for one tenant, `--max-pages`, `--page-size`. |
+| `demo` | Synthetic snapshot for trying things offline. |
+| `check` | Snapshot integrity checks; exit 6 on failure. Wire it into unattended refreshes. |
+| `metrics <area>` | `revenue`, `service`, `sales`, `install`, `accounting`, `marketing`, `office`, `memberships`, `all`. |
+| `list <kind>` | `jobs`, `opportunities`, `invoices`, `purchase-orders`, `calls`, `memberships`, `technicians`, `campaigns`, `business-units`, `people`, with filters, `--sort`, `--fields`, `--limit`, `--count`. |
+| `api get <path>` | Any GET endpoint for one tenant. `--param k=v`, `--all` (paging), `--export --from TOKEN` (bulk export feeds), `--raw`. |
+| `api endpoints` / `api modules` | Search the catalogue built from ServiceTitan's OpenAPI documents. |
+| `render` | Build `dashboard.html` (validates first; never overwrites a good dashboard with a broken pull). |
+| `duplicates` | People who may hold two ServiceTitan user records. |
+| `palette` | Accessibility check for chart colours. |
+| `schema` | Machine-readable description of all of the above. |
+| `init` | State-aware setup checklist. |
 
----
+Global options work before or after the command: `--profile`, `--tenant`,
+`--data`, `--format json|text`, `--compact`, `--as-of`, `--config`/`--env-file`
+(legacy layout), `--secrets auto|keyring|file`, `--quiet`.
 
-## Keeping it current
+Ranges: `mtd` (default for metrics), `qtd`, `ytd`, `wtd`, `today`, `yesterday`,
+`last7/30/90`, `next7/14/30/45/90`, `custom --start --end`. Ranges end at
+`--as-of`, which defaults to now in the profile's timezone, so an answer can be
+reproduced later.
 
-`dashboard.html` is a snapshot. To refresh, re-run:
+### Exit codes
 
-```bash
-python fetch_dashboard_data.py && python render_dashboard.py
-```
+| Code | Meaning |
+|---|---|
+| 0 | success |
+| 1 | unexpected error (`SERVICETITAN_DEBUG=1` for a traceback) |
+| 2 | usage error |
+| 3 | configuration problem (no profile, missing credentials) |
+| 4 | authentication failed |
+| 5 | ServiceTitan API or network error |
+| 6 | validation failed (snapshot checks, palette) |
+| 7 | snapshot missing or stale |
 
-Schedule that pair however you like — `cron`, Task Scheduler, a CI job. Three
-times on a working day is a reasonable cadence.
+Errors go to stderr as `{"error": {"code", "exit", "message", "hint", "details"}}`.
 
-`render_dashboard.py` **validates before it writes**: record-count floors, every
-configured location present, no cross-location id mixing, all names resolvable,
-and data freshness. If a check fails it writes nothing and exits non-zero, so a
-half-failed pull leaves your last good dashboard in place instead of replacing
-it with something authoritative-looking and wrong.
+## For agents
 
-That matters for unattended runs: **check the exit code**, or a broken fetch
-will fail silently and you will be reading stale numbers without knowing.
+[docs/agent-guide.md](docs/agent-guide.md) is the short version an agent can be
+pointed at. The essentials:
 
-### Using Claude Code (optional)
+1. `servicetitan status` to learn the profile, tenants and snapshot age.
+2. `servicetitan fetch --max-age 6` when the snapshot is stale (minutes for a large tenant).
+3. `servicetitan metrics <area>` for questions with a known answer shape; add `--explain` before quoting a number to a person.
+4. `servicetitan list <kind>` for "which ones" questions; trim payloads with `--fields` and `--limit`.
+5. `servicetitan api endpoints --search ...` then `servicetitan api get ...` for anything the snapshot does not hold.
 
-If you use Claude Code, you can have it run that pair on a schedule and publish
-the result as a shareable artifact, so the link always shows current numbers.
-Ask it to set up a scheduled task around the two commands above. Nothing in this
-package requires it.
-
----
+Ask the CLI itself: `servicetitan schema`.
 
 ## Reading the numbers
 
-Several figures are derived rather than read straight from a field, because the
-obvious approach gives a confidently wrong answer. The full reasoning is in the
-docstring at the top of `fetch_dashboard_data.py`. The ones most likely to
-prompt a question:
+Several figures are derived rather than read from a field, because the obvious
+approach gives a confidently wrong answer. `metrics --explain` carries these
+definitions; the full reasoning is in the docstring of `src/servicetitan_cli/fetch.py`.
 
-- **Avg ticket is measured on calls that billed.** A large share of completed
-  jobs bill nothing — warranty and callback work is no-charge by design, and a
-  sales visit produces an estimate rather than job revenue. Folding those zeros
-  in drags the average far below what anyone actually sold, so the tile shows
-  the billed average with revenue-per-dispatch beside it.
-
+- **Avg ticket is measured on calls that billed.** Warranty and callback work is
+  no-charge by design and a sales visit produces an estimate, not revenue.
+  Revenue per dispatch is reported beside it.
 - **Close rate counts opportunities, not estimates.** A Good/Better/Best
-  presentation writes one estimate per option for a single chance to sell.
-  Counting estimates inflates the denominator; on a real tenant this was the
-  difference between 35% and 54%.
+  presentation is one chance to sell, not three.
+- **Booked revenue** is the price on the job dated to its next future
+  appointment; open jobs with no future appointment are excluded and counted.
+- **AR excludes undated invoices** (pre-created when a job is booked).
+- **Committed on open POs is not accounts payable.**
+- **Membership attach is approximate:** same customer, same day.
 
-- **Booked revenue** reads the price on the job, dated to its next *future*
-  appointment. Jobs stuck open with no future appointment are excluded rather
-  than counted as pipeline — the fetch prints how many it skipped, and a large
-  number is a dispatch-hygiene signal.
+## Where things live
 
-- **AR excludes undated invoices.** ServiceTitan pre-creates an invoice when a
-  job is booked; those carry a balance but no invoice date. They are unbilled
-  future work, and counting them both double-counts booked revenue and dumps
-  them into the oldest aging bucket as if severely overdue.
+```
+<config dir>/profiles.json      companies, tenants, settings (no secrets)
+<config dir>/credentials.json   secrets, only when no OS keyring is available (mode 0600)
+<config dir>/tokens.json        15-minute access tokens (mode 0600)
+<config dir>/snapshots/*.json   one snapshot per profile
+```
 
-- **"Committed on Open POs" is not accounts payable.** ServiceTitan exposes no
-  vendor-bills endpoint on standard plans, so this is unreceived-PO spend,
-  labeled as such.
+The config dir is `%APPDATA%\servicetitan-cli` on Windows,
+`~/Library/Application Support/servicetitan-cli` on macOS,
+`~/.config/servicetitan-cli` on Linux, or `$SERVICETITAN_HOME`.
 
-- **Membership attach is approximate** — same customer, same day. The obvious
-  membership→job link in the API is not a Jobs-table id.
+Snapshots and rendered dashboards contain real customer names, employee names
+and revenue figures. Treat them like the ServiceTitan account itself.
 
-If one person appears twice, run `python check_duplicates.py`.
+## Development
 
----
+```bash
+git clone https://github.com/xlzuvekas/servicetitan-cli && cd servicetitan-cli
+pip install -e ".[dev]"
+pytest
+python scripts/build_endpoint_catalogue.py   # refresh the endpoint catalogue from the portal
+```
 
-## Files
+`docs/servicetitan-api.md` collects what the ServiceTitan documentation says
+about auth, paging, rate limits and the data model, with sources.
+`BRANDING.md` covers logos, colours and type for the rendered dashboard.
 
-| File | What it is |
+## Migrating from the dashboard template
+
+| Template | Now |
 |---|---|
-| `config.example.json` | Copy to `config.json`. All company-specific settings. |
-| `.env.example` | Copy to `.env`. Credentials only. Never commit. |
-| `test_connection.py` | Verifies each location and shows department mapping. |
-| `fetch_dashboard_data.py` | Read-only pull → `live_data.json`. |
-| `generate_demo_data.py` | Synthetic data → `demo_data.json`. |
-| `render_dashboard.py` | Validates, then builds `dashboard.html`. |
-| `check_duplicates.py` | Finds people holding two user records. |
-| `dashboard_template.html` | The dashboard itself. Theme tokens at the top. |
-| `st_config.py` | Shared config/env loading. |
+| `python test_connection.py` | `servicetitan auth check` |
+| `python fetch_dashboard_data.py` | `servicetitan fetch` |
+| `python render_dashboard.py [--demo]` | `servicetitan render [--data demo.json]` |
+| `python generate_demo_data.py` | `servicetitan demo` |
+| `python check_duplicates.py` | `servicetitan duplicates` |
+| `python validate_palette.py ...` | `servicetitan palette ...` |
+| `config.json` + `.env` | `servicetitan profile import`, or keep using them in place |
 
----
+## License
 
-## Privacy
-
-`live_data.json` and `dashboard.html` contain **real customer names, employee
-names and revenue figures**. Both are gitignored by default. Think before you
-share the rendered file — the Sales drill-down and the AR table name customers
-and what they owe.
-
-`.env` holds credentials that can read your entire ServiceTitan account. Never
-commit it, and rotate the secret if it is ever exposed.
-
-## Requirements
-
-Python 3.9+ and `requests` (`pip install requests`). Nothing else.
+MIT.

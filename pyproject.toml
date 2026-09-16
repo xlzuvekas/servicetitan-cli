@@ -1,0 +1,50 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "servicetitan-cli"
+version = "0.1.0"
+description = "Read-only ServiceTitan command-line tool built for AI agents: multi-tenant credentials stored in the OS keychain, JSON everywhere, derived operations metrics, and a GET passthrough to every ServiceTitan API."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "Business Bots" }]
+keywords = ["servicetitan", "cli", "agents", "home-services", "dashboard"]
+classifiers = [
+  "Environment :: Console",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Topic :: Office/Business",
+]
+dependencies = [
+  "requests>=2.28",
+  "keyring>=24",
+  "tzdata; sys_platform == 'win32'",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7", "build"]
+
+[project.scripts]
+servicetitan = "servicetitan_cli.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/xlzuvekas/servicetitan-cli"
+Issues = "https://github.com/xlzuvekas/servicetitan-cli/issues"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+servicetitan_cli = ["data/*.html", "data/*.json"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
