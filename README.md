@@ -153,7 +153,9 @@ pointed at. The essentials:
 4. `servicetitan list <kind>` for "which ones" questions; trim payloads with `--fields` and `--limit`.
 5. `servicetitan api endpoints --search ...` then `servicetitan api get ...` for anything the snapshot does not hold.
 
-Ask the CLI itself: `servicetitan schema`.
+Ask the CLI itself: `servicetitan schema`. For Claude Code or Cowork, install
+`skills/servicetitan/SKILL.md` as a skill and the agent will reach for the CLI
+on its own when ServiceTitan comes up.
 
 ## Reading the numbers
 
