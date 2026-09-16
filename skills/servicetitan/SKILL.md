@@ -47,12 +47,20 @@ Useful list filters: `--range next7 --booked` (upcoming jobs), `--tech "Name"`,
 `--customer "Name"`, `--min-days-past-due 60 --sort=-balance`, `--won` / `--open`
 `--rep "Name"`, `--renews-within 30`, `--fields a,b,c --limit 20`, `--count`.
 
-Anything the snapshot does not hold:
+Anything the snapshot does not hold comes live from ServiceTitan through the
+API tree. Discover first, then call; never guess a path:
 
 ```bash
-servicetitan api endpoints --search "<words>"
-servicetitan api get jpm/v2/appointments --param startsOnOrAfter=2026-09-16T00:00:00Z --all
+servicetitan api                                  # modules
+servicetitan api jpm                              # resources (aliases: sales, jobs, calls ...)
+servicetitan api jpm appointments                 # operations
+servicetitan api jpm appointments list --describe # parameters and response fields
+servicetitan api jpm appointments list --starts-on-or-after 2026-09-16T00:00:00Z --all --fields jobId,start,status
+servicetitan api endpoints --search "<words>"     # when the module is unknown
 ```
+
+Write operations appear in the tree marked disabled; the tool cannot execute
+them. Responses say `"source": "live"`; snapshot answers say `"source": "snapshot"`.
 
 ## Quoting numbers to people
 

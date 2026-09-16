@@ -253,30 +253,20 @@ def build_parser():
     g.add_argument("--active", action="store_true")
     g.add_argument("--inactive", action="store_true")
 
-    # ---- raw API
-    p = _sub(sub, "api", "read-only access to any ServiceTitan endpoint, and the endpoint catalogue")
-    aps = p.add_subparsers(dest="api_cmd", metavar="<action>")
-    x = _sub(aps, "get", "GET an endpoint for one tenant",
-             description="GET any ServiceTitan endpoint. Paths may be documented form (/jpm/v2/tenant/{tenant}/jobs), "
-                         "shorthand (jpm/v2/jobs) or a full URL on this environment's API host. Requests are never "
-                         "sent anywhere else. With several tenants in the profile, pass --tenant CODE.")
-    x.add_argument("path")
-    x.add_argument("--param", action="append", default=[], metavar="KEY=VALUE", help="query parameter (repeatable)")
-    x.add_argument("--all", action="store_true", help="follow pages until hasMore is false")
-    x.add_argument("--max-pages", type=int, default=20, help="page cap with --all (default %(default)s)")
-    x.add_argument("--page-size", type=int, help="pageSize (default 200 with --all)")
-    x.add_argument("--export", action="store_true", help="treat as an export endpoint: follow continueFrom")
-    x.add_argument("--from", dest="from_token", metavar="TOKEN", help="export continuation token or start date")
-    x.add_argument("--include-recent", action="store_true", help="export: includeRecentChanges=true")
-    x.add_argument("--max-batches", type=int, default=10, help="export batch cap (default %(default)s)")
-    x.add_argument("--raw", action="store_true", help="print the response body as is, without the envelope")
-    x = _sub(aps, "endpoints", "search the catalogue of GET endpoints from ServiceTitan's OpenAPI docs")
-    x.add_argument("--search", metavar="TEXT", help="words that must all appear in path/operation/summary/params")
-    x.add_argument("--module", help="e.g. jpm-v2, crm-v2, accounting-v2, telecom")
-    x.add_argument("--exports", action="store_true", help="only bulk export endpoints")
-    x.add_argument("--fields", action="store_true", help="include response record fields")
-    x.add_argument("--limit", type=int, default=50)
-    x = _sub(aps, "modules", "list API modules with endpoint counts")
+    # ---- the API tree
+    x = _sub(sub, "api", "the whole ServiceTitan API as a command tree: api <module> <resource> <operation>",
+             description="Progressive discovery of ServiceTitan's API, generated from its OpenAPI documents.\n\n"
+                         "  servicetitan api                         modules\n"
+                         "  servicetitan api jpm                     resources in a module\n"
+                         "  servicetitan api jpm jobs                operations on a resource\n"
+                         "  servicetitan api jpm jobs list --help    every parameter, typed and described\n"
+                         "  servicetitan api jpm jobs list --job-status Completed --completed-on-or-after 2026-09-01T00:00:00Z --all\n"
+                         "  servicetitan api jpm jobs get 12345\n"
+                         "  servicetitan api jpm jobs list --describe   the contract as JSON (no credentials needed)\n\n"
+                         "Built-ins: `api get <path>` for a raw path, `api endpoints --search WORDS`, `api modules`.\n"
+                         "GET operations run live for one tenant (--tenant CODE when the profile has several); write\n"
+                         "operations are listed for discovery but never executed: this tool is read-only.")
+    x.add_argument("rest", nargs=argparse.REMAINDER, metavar="<module> <resource> <operation> ...")
 
     # ---- misc
     x = _sub(sub, "palette", "validate chart colours for accessibility (band, chroma, contrast, colour-blind separation)")
@@ -788,51 +778,120 @@ def cmd_list(ctx, args):
     return result
 
 
+def _api_builtin_parser(name):
+    p = argparse.ArgumentParser(prog="servicetitan api %s" % name, formatter_class=argparse.RawDescriptionHelpFormatter)
+    _common(p)
+    if name == "get":
+        p.description = ("GET any ServiceTitan path for one tenant. Paths may be the documented form "
+                         "(/jpm/v2/tenant/{tenant}/jobs), shorthand (jpm/v2/jobs) or a full URL on this environment's API "
+                         "host; requests never go anywhere else. Prefer the command tree (`servicetitan api jpm jobs list`) "
+                         "when the operation is catalogued.")
+        p.add_argument("path")
+        p.add_argument("--param", action="append", default=[], metavar="KEY=VALUE", help="query parameter (repeatable)")
+        p.add_argument("--all", action="store_true", help="follow pages until hasMore is false")
+        p.add_argument("--max-pages", type=int, default=20, help="page cap with --all (default %(default)s)")
+        p.add_argument("--page-size", type=int, help="pageSize (default 200 with --all)")
+        p.add_argument("--export", action="store_true", help="treat as an export endpoint: follow continueFrom")
+        p.add_argument("--from", dest="from_token", metavar="TOKEN", help="export continuation token or start date")
+        p.add_argument("--include-recent", action="store_true", help="export: includeRecentChanges=true")
+        p.add_argument("--max-batches", type=int, default=10, help="export batch cap (default %(default)s)")
+        p.add_argument("--raw", action="store_true", help="print the response body as is, without the envelope")
+    elif name == "endpoints":
+        p.description = "Search the catalogue of ServiceTitan operations (GET only unless --all-methods)."
+        p.add_argument("--search", metavar="TEXT", help="words that must all appear in path/operation/summary/params")
+        p.add_argument("--module", help="e.g. jpm, crm, accounting, settings, telecom (aliases: sales, jobs, calls ...)")
+        p.add_argument("--exports", action="store_true", help="only bulk export feeds")
+        p.add_argument("--all-methods", action="store_true", help="include write operations")
+        p.add_argument("--fields", action="store_true", help="include response record fields")
+        p.add_argument("--limit", type=int, default=50)
+    elif name == "modules":
+        p.description = "List API modules with operation counts."
+    return p
+
+
 def cmd_api(ctx, args):
-    from . import endpoints as ep
-    if args.api_cmd == "endpoints":
-        rows = ep.search(args.search, args.module, exports_only=args.exports, include_fields=args.fields, limit=args.limit)
-        return {"catalogue": ep.catalogue().get("source"), "count": len(rows), "endpoints": rows,
-                "usage": "servicetitan api get <path> [--param k=v ...] [--all]; export endpoints: --export [--from TOKEN]"}
-    if args.api_cmd == "modules":
-        return {"modules": ep.modules()}
-    if args.api_cmd == "get":
+    from . import apitree, endpoints as ep
+    rest = list(args.rest or [])
+    fmt = _opt(args, "format") or os.environ.get("SERVICETITAN_FORMAT") or "json"
+    if rest and rest[0] == "--":
+        rest = rest[1:]
+    if not rest or rest[0] in ("-h", "--help"):
+        data = apitree.overview()
+        if rest:
+            sys.stdout.write(apitree.overview_text(data))
+            return None
+        return data
+    head = rest[0]
+    if head in ("get", "endpoints", "modules"):
+        sub = _api_builtin_parser(head).parse_args(rest[1:])
+        for k, v in vars(sub).items():
+            if k not in vars(args) or v not in (None, False):
+                setattr(args, k, v)
+        if head == "modules":
+            return {"source": "catalogue", "modules": ep.modules()}
+        if head == "endpoints":
+            rows = ep.search(sub.search, sub.module, exports_only=sub.exports, include_fields=sub.fields, limit=sub.limit,
+                             methods=None if sub.all_methods else ("GET",))
+            return {"source": "catalogue", "count": len(rows), "endpoints": rows,
+                    "usage": "run one with its `command`, add --describe or --help for its parameters"}
         params = {}
-        for kv in args.param:
+        for kv in sub.param:
             if "=" not in kv:
                 raise UsageError("--param expects KEY=VALUE, got %r" % kv)
             k, v = kv.split("=", 1)
             params[k.strip()] = v
-        tenant, client = _single_tenant_client(ctx, args, page_size=args.page_size)
-        url = client.resolve_url(args.path)
-        if args.export:
-            batches, items, token, has_more = 0, [], args.from_token, False
-            for batch, token, has_more in client.export(args.path, from_token=args.from_token,
-                                                        include_recent_changes=args.include_recent,
-                                                        max_batches=args.max_batches):
+        tenant, client = _single_tenant_client(ctx, args, page_size=sub.page_size)
+        url = client.resolve_url(sub.path)
+        env = {"source": "live", "tenant": tenant["code"], "method": "GET", "url": url, "params": params}
+        if sub.export:
+            batches, items, token, has_more = 0, [], sub.from_token, False
+            for batch, token, has_more in client.export(sub.path, from_token=sub.from_token,
+                                                        include_recent_changes=sub.include_recent, max_batches=sub.max_batches):
                 batches += 1
                 items.extend(batch)
-            return {"tenant": tenant["code"], "url": url, "batches": batches, "count": len(items),
-                    "continueFrom": token, "hasMore": has_more, "data": items}
-        if args.all:
-            items = []
-            pages = 0
-            for page, batch, _ in client.get_pages(args.path, params, max_pages=args.max_pages, page_size=args.page_size):
+            env.update({"batches": batches, "count": len(items), "continueFrom": token, "hasMore": has_more, "data": items})
+            return env
+        if sub.all:
+            items, pages = [], 0
+            for page, batch, _ in client.get_pages(sub.path, params, max_pages=sub.max_pages, page_size=sub.page_size):
                 pages = page
                 items.extend(batch)
-            return {"tenant": tenant["code"], "url": url, "pages": pages, "count": len(items),
-                    "truncated": client.last_truncated, "data": items}
-        body = client.get(args.path, params)
-        if args.raw:
+            env.update({"pages": pages, "count": len(items), "truncated": client.last_truncated, "data": items})
+            return env
+        body = client.get(sub.path, params)
+        if sub.raw:
             return body
-        out = {"tenant": tenant["code"], "url": url, "params": params}
         if isinstance(body, dict) and "data" in body:
-            out.update({"page": body.get("page"), "pageSize": body.get("pageSize"), "hasMore": body.get("hasMore"),
+            env.update({"page": body.get("page"), "pageSize": body.get("pageSize"), "hasMore": body.get("hasMore"),
                         "totalCount": body.get("totalCount"), "count": len(body.get("data") or []), "data": body.get("data")})
         else:
-            out["body"] = body
-        return out
-    raise UsageError("api needs an action", hint="get, endpoints, modules")
+            env["body"] = body
+        return env
+
+    # ---- the generated tree: module > resource > operation
+    module = ep.resolve_module(head)
+    if len(rest) == 1 or rest[1] in ("-h", "--help"):
+        data = apitree.module_overview(module)
+        if len(rest) > 1:
+            sys.stdout.write(apitree.overview_text(data))
+            return None
+        return data
+    resource = ep.resolve_resource(module, rest[1])
+    if len(rest) == 2 or rest[2] in ("-h", "--help"):
+        data = apitree.resource_overview(module, resource)
+        if len(rest) > 2:
+            sys.stdout.write(apitree.overview_text(data))
+            return None
+        return data
+    op = ep.resolve_operation(module, resource, rest[2])
+    parser = apitree.build_parser(op, add_common=_common)
+    ns = parser.parse_args(rest[3:])
+    for k, v in vars(ns).items():   # global options given after the operation (e.g. --tenant, --format)
+        if k in ("profile", "tenant", "format", "compact", "quiet", "as_of", "data", "config", "env_file", "secrets") and v not in (None, False):
+            setattr(args, k, v)
+    if ns.describe:
+        return ep.describe(op)
+    return apitree.execute(op, ns, ctx, client_factory=None, tenant_code=_opt(args, "tenant"))
 
 
 def cmd_palette(ctx, args):
@@ -909,6 +968,10 @@ def main(argv=None):
         result = handler(ctx, args, parser) if args.command == "schema" else handler(ctx, args)
         for w in ctx.warnings:
             progress("warning: %s" % w, quiet)
+        if result is None:
+            return 0
+        fmt = _opt(args, "format") or os.environ.get("SERVICETITAN_FORMAT") or "json"
+        compact = bool(_opt(args, "compact"))
         if args.command in ("tenant", "profile") and ctx.secrets_selected() and ctx.secrets.fallback_reason:
             progress("note: secrets are kept in %s because the OS keyring is unavailable (%s)"
                      % (ctx.secrets.detail, ctx.secrets.fallback_reason), quiet)

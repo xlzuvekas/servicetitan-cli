@@ -205,7 +205,7 @@ def list_records(q, kind, filters=None, limit=100, sort=None, fields=None, count
     if fields:
         want = [x.strip() for x in fields.split(",") if x.strip()]
         rows = [{k: r.get(k) for k in want} for r in rows]
-    out = {"kind": kind, "profile": q.data.get("profile"), "tenant": q.tenant or "all",
+    out = {"kind": kind, "source": "snapshot", "profile": q.data.get("profile"), "tenant": q.tenant or "all",
            "range": ({"kind": q.range_kind, "start": q.start.isoformat(), "end": q.end.isoformat()} if use_range else None),
            "filters": {k: v for k, v in f.items() if v is not None}, "total": total,
            "returned": (0 if count_only else len(rows)),

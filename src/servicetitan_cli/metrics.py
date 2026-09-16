@@ -182,6 +182,7 @@ class Query(object):
         end, label = self.forward()
         return {
             "area": area,
+            "source": "snapshot",
             "profile": self.data.get("profile"),
             "tenant": self.tenant or "all",
             "asOf": self.as_of.isoformat(),
@@ -591,7 +592,7 @@ def compute(q, area, explain=False):
         out["areas"] = {}
         for name in AREAS:
             res = AREA_FUNCS[name](q)
-            for k in ("area", "profile", "tenant", "asOf", "timezone", "range", "snapshot"):
+            for k in ("area", "source", "profile", "tenant", "asOf", "timezone", "range", "snapshot"):
                 res.pop(k, None)
             if explain:
                 res["definitions"] = DEFINITIONS.get(name, {})

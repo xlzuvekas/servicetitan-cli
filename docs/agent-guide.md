@@ -51,11 +51,24 @@ and "close rate" counts opportunities (one per job), not estimates.
 profile, `--tenant CODE` narrows to one ServiceTitan account; the default is the
 combined view. Record ids are prefixed with the tenant code (`SD:5510`).
 
-## Raw API rules
+## Live API access
 
-- `api get` needs exactly one tenant; pass `--tenant` when the profile has several.
-- Paths: `/jpm/v2/tenant/{tenant}/jobs`, or shorthand `jpm/v2/jobs`. The tenant
-  id is filled in for you. Nothing is ever sent to another host.
+Discover, then call. Never guess a path.
+
+```bash
+servicetitan api                              # modules
+servicetitan api jpm                          # resources in a module (aliases: sales, jobs, calls ...)
+servicetitan api jpm jobs                     # operations; writes are marked disabled
+servicetitan api jpm jobs list --describe     # parameters, enums, response fields (JSON)
+servicetitan api jpm jobs list --job-status Completed --completed-on-or-after 2026-09-01T00:00:00Z --count
+servicetitan api jpm jobs get 12345 --fields jobNumber,total,jobStatus
+servicetitan api endpoints --search "words"   # when the module is unknown
+```
+
+- Every response carries `source`: `snapshot` (metrics/list) or `live` (api).
+- `api ...` needs exactly one tenant; pass `--tenant` when the profile has several.
+- `api get <path>` still exists for a raw path (`jpm/v2/jobs` shorthand or the
+  documented form). The tenant id is filled in. Nothing is ever sent to another host.
 - Paged lists: `--all --max-pages N` follows `hasMore`. `pageSize` defaults to 50 on the API (200 here);
   the client caps it at 500. `ids=` filters take at most 50 ids. `active` filters take `True`, `Any`
   or `False` (default: active records only).

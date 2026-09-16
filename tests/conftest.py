@@ -48,7 +48,10 @@ def isolated_home(tmp_path, monkeypatch):
 def run_cli(capsys, *argv):
     """Run the CLI in-process; return (exit code, parsed stdout JSON or text, stderr)."""
     from servicetitan_cli.cli import main
-    code = main(list(argv))
+    try:
+        code = main(list(argv))
+    except SystemExit as e:  # argparse --help / usage errors exit directly
+        code = e.code if isinstance(e.code, int) else 1
     captured = capsys.readouterr()
     out = captured.out
     try:

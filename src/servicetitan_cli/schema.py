@@ -66,6 +66,20 @@ SNAPSHOT_RECORDS = {
 }
 
 
+def _api_tree():
+    from . import endpoints
+    doc = endpoints.catalogue()
+    tree = []
+    for m in doc["modules"]:
+        res = {}
+        for r in endpoints.resources(m["module"]):
+            res[r["resource"]] = {"reads": r["reads"], "writes": r["writes"]}
+        tree.append({"module": m["module"], "title": m.get("title"), "aliases": m.get("aliases") or [], "resources": res})
+    return {"grammar": "servicetitan api <module> <resource> <operation> [PATH-ARGS] [--query-options] [--all|--count|--fields|--raw|--describe]",
+            "note": "Reads execute; writes are discoverable only. `--describe` returns the operation's parameters, types, enums and response fields.",
+            "operations": doc["count"], "reads": doc["readCount"], "modules": tree}
+
+
 def build_schema(parser):
     return {
         "name": "servicetitan",
@@ -78,6 +92,7 @@ def build_schema(parser):
             "profiles": "A profile is one company with one or more ServiceTitan tenants. Select with --profile NAME or SERVICETITAN_PROFILE; the store's default profile is used otherwise. Legacy config.json + .env in the working directory and plain SERVICETITAN_* environment variables also work.",
             "tenants": "--tenant CODE narrows to one tenant; default is all tenants of the profile (the dashboard's 'Combined').",
             "snapshots": "fetch writes <config dir>/snapshots/<profile>.json; metrics, list, check, render, duplicates and status read it. Use --data PATH to point elsewhere. Every query response carries snapshot.generatedAt, ageHours and stale so you can decide whether to fetch first (or run `fetch --max-age 6`).",
+            "source": "every response says where its data came from: 'snapshot' (metrics, list) or 'live' (api ..., auth check) or 'catalogue' (api discovery).",
             "ranges": {"kinds": list(RANGE_KINDS), "note": "Ranges end at --as-of (default now, in the profile timezone). custom needs --start and optionally --end (YYYY-MM-DD)."},
             "ids": "Record ids are namespaced by tenant code ('SD:5510') because separate ServiceTitan tenants reuse raw ids.",
             "environment": {
@@ -93,6 +108,7 @@ def build_schema(parser):
             },
         },
         "metrics": {"areas": list(AREAS) + ["all"], "definitions": DEFINITIONS},
+        "api": _api_tree(),
         "list": {"kinds": list(KINDS)},
         "snapshotRecords": SNAPSHOT_RECORDS,
         "commands": _walk(parser, ["servicetitan"]),

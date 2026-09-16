@@ -2,6 +2,7 @@
 import json
 import os
 
+import pytest
 from conftest import run_cli
 
 from servicetitan_cli import endpoints
@@ -33,12 +34,13 @@ def test_find_duplicates():
 
 def test_endpoint_catalogue():
     cat = endpoints.catalogue()
-    assert cat["count"] >= 300 and len(cat["endpoints"]) == cat["count"]
-    jobs = endpoints.search("jobs", module="jpm-v2")
-    assert any(e["path"] == "/jpm/v2/tenant/{tenant}/jobs" for e in jobs)
+    assert cat["count"] >= 590 and cat["readCount"] >= 320 and len(cat["operations"]) == cat["count"]
+    jobs = endpoints.search("jobs", module="jpm")
+    assert any(e["path"] == "/jpm/v2/tenant/{tenant}/jobs" for e in jobs) and all(e["method"] == "GET" for e in jobs)
     assert all(e["export"] for e in endpoints.search(exports_only=True))
-    e = endpoints.describe("/jpm/v2/tenant/{tenant}/jobs")
-    assert e and "jobStatus" in e["query"] and "total" in e["fields"] and e["scope"] == "tn.jpm.jobs:r"
+    assert any(e["method"] != "GET" for e in endpoints.search("jobs", module="jpm", methods=None))
+    e = endpoints.by_path("/jpm/v2/tenant/{tenant}/jobs")
+    assert e and "jobStatus" in [p["name"] for p in e["params"]] and "total" in e["fields"] and e["scope"] == "tn.jpm.jobs:r"
     assert any(m["module"] == "telecom" for m in endpoints.modules())
     from servicetitan_cli.fetch import FETCH_ENDPOINTS
     needed = endpoints.scopes_for(FETCH_ENDPOINTS)
@@ -47,6 +49,133 @@ def test_endpoint_catalogue():
     granted = [s for s in needed.values() if s != "tn.tlc.calls:r"]
     assert endpoints.missing_scopes(granted, FETCH_ENDPOINTS) == ["tn.tlc.calls:r"]
     assert endpoints.missing_scopes(None, FETCH_ENDPOINTS) == []
+
+
+def test_api_tree_resolution():
+    from servicetitan_cli.errors import UsageError
+    assert endpoints.resolve_module("jpm") == "jpm" and endpoints.resolve_module("sales") == "salestech"
+    assert endpoints.resolve_module("tenant-crm-v2") == "crm" and endpoints.resolve_module("JOBS") == "jpm"
+    with pytest.raises(UsageError) as ei:
+        endpoints.resolve_module("accounts")
+    assert "accounting" in ei.value.hint
+    assert endpoints.resolve_resource("jpm", "job_types") == "job-types"
+    with pytest.raises(UsageError) as ei:
+        endpoints.resolve_resource("jpm", "job")
+    assert "jobs" in ei.value.hint
+    op = endpoints.resolve_operation("jpm", "jobs", "list")
+    assert op["method"] == "GET" and op["kind"] == "paged"
+    get = endpoints.resolve_operation("jpm", "jobs", "get")
+    assert [p["name"] for p in get["params"] if p["in"] == "path"] == ["id"]
+    names = {o["operation"] for o in endpoints.operations("telecom", "calls")}
+    assert {"list", "list-v2", "export", "get", "recording"} <= names
+    est = {o["operation"]: o for o in endpoints.operations("salestech", "estimates")}
+    assert est["export-legacy"]["path"].endswith("/estimates/export") and est["create"]["executable"] is False
+    d = endpoints.describe(op)
+    assert d["example"].startswith("servicetitan api jpm jobs list") and any(q["name"] == "jobStatus" and q.get("enum") for q in d["queryParams"])
+    assert "total" in d["responseFields"]
+    r = {x["resource"]: x for x in endpoints.resources("jpm")}
+    assert "list" in r["jobs"]["reads"] and "create" in r["jobs"]["writes"]
+
+
+class FakeTreeClient(object):
+    def __init__(self, creds, progress=None):
+        self.creds = creds
+        self.calls = []
+        self.last_truncated = False
+
+    def resolve_url(self, path):
+        return "https://api.servicetitan.io" + path.replace("{tenant}", "555")
+
+    def get(self, path, params=None):
+        self.calls.append((path, dict(params or {})))
+        if params and params.get("includeTotal") == "true":
+            return {"data": [{"id": 1}], "hasMore": True, "totalCount": 321}
+        if path.endswith("/jobs/12345"):
+            return {"id": 12345, "jobNumber": "J-1", "total": 99.5}
+        return {"data": [{"id": 1, "jobNumber": "A", "total": 1}, {"id": 2, "jobNumber": "B", "total": 2}],
+                "page": params.get("page", 1), "pageSize": 50, "hasMore": False}
+
+    def get_pages(self, path, params=None, max_pages=None, page_size=None):
+        yield 1, [{"id": 1}], {}
+        yield 2, [{"id": 2}], {}
+
+    def export(self, path, from_token=None, include_recent_changes=False, max_batches=None):
+        self.calls.append((path, {"from": from_token, "recent": include_recent_changes}))
+        yield [{"id": 9}], "tok-1", False
+
+
+def test_api_tree_parser_and_execution(isolated_home, monkeypatch):
+    from servicetitan_cli import apitree
+    from servicetitan_cli.config import Context
+    from servicetitan_cli.errors import UsageError
+    for k, v in (("SERVICETITAN_TENANT_ID", "555"), ("SERVICETITAN_CLIENT_ID", "c"), ("SERVICETITAN_CLIENT_SECRET", "s"),
+                 ("SERVICETITAN_APP_KEY", "k")):
+        monkeypatch.setenv(k, v)
+    ctx = Context()
+    op = endpoints.resolve_operation("jpm", "jobs", "list")
+    parser = apitree.build_parser(op)
+    ns = parser.parse_args(["--job-status", "completed", "--page-size", "10", "--completed-on-or-after", "2026-09-01T00:00:00Z",
+                            "--fields", "jobNumber,total"])
+    assert ns.q_job_status == "Completed"  # case-insensitive enum mapped to the spec's spelling
+    with pytest.raises(SystemExit):
+        parser.parse_args(["--job-status", "Finished"])
+    with pytest.raises(SystemExit):
+        parser.parse_args(["--page-size", "ten"])
+    holder = {}
+
+    def factory(creds, **kw):
+        holder["client"] = FakeTreeClient(creds)
+        return holder["client"]
+    env = apitree.execute(op, ns, ctx, client_factory=factory)
+    path, params = holder["client"].calls[0]
+    assert path == "/jpm/v2/tenant/{tenant}/jobs" and params == {"jobStatus": "Completed", "pageSize": 10,
+                                                                  "completedOnOrAfter": "2026-09-01T00:00:00Z"}
+    assert env["source"] == "live" and env["count"] == 2 and env["data"] == [{"jobNumber": "A", "total": 1}, {"jobNumber": "B", "total": 2}]
+    assert env["operation"] == "jpm jobs list" and env["url"].endswith("/tenant/555/jobs")
+
+    get_op = endpoints.resolve_operation("jpm", "jobs", "get")
+    ns = apitree.build_parser(get_op).parse_args(["12345"])
+    env = apitree.execute(get_op, ns, ctx, client_factory=factory)
+    assert env["data"]["jobNumber"] == "J-1" and holder["client"].calls[-1][0] == "/jpm/v2/tenant/{tenant}/jobs/12345"
+
+    ns = apitree.build_parser(op).parse_args(["--count"])
+    assert apitree.execute(op, ns, ctx, client_factory=factory)["totalCount"] == 321
+    ns = apitree.build_parser(op).parse_args(["--all", "--max-pages", "5"])
+    assert apitree.execute(op, ns, ctx, client_factory=factory)["count"] == 2
+
+    exp = endpoints.resolve_operation("jpm", "jobs", "export")
+    ns = apitree.build_parser(exp).parse_args(["--from", "2026-01-01", "--include-recent-changes", "true"])
+    env = apitree.execute(exp, ns, ctx, client_factory=factory)
+    assert env["continueFrom"] == "tok-1" and holder["client"].calls[-1][1] == {"from": "2026-01-01", "recent": True}
+
+    write = endpoints.resolve_operation("jpm", "jobs", "create")
+    ns = apitree.build_parser(write).parse_args([])
+    with pytest.raises(UsageError) as ei:
+        apitree.execute(write, ns, ctx, client_factory=factory)
+    assert "read-only" in ei.value.message and "list" in ei.value.hint
+
+
+def test_cli_api_tree_discovery(capsys, isolated_home):
+    code, out, _ = run_cli(capsys, "api")
+    assert code == 0 and out["source"] == "catalogue" and any(m["module"] == "jpm" for m in out["modules"])
+    code, out, _ = run_cli(capsys, "api", "jpm")
+    assert code == 0 and any(r["resource"] == "jobs" and "list" in r["reads"] for r in out["resources"])
+    code, out, _ = run_cli(capsys, "api", "sales", "estimates")
+    assert code == 0 and out["module"] == "salestech" and any(o["operation"] == "list" for o in out["operations"])
+    code, out, _ = run_cli(capsys, "api", "jpm", "jobs", "list", "--describe")
+    assert code == 0 and out["method"] == "GET" and any(q["name"] == "jobStatus" for q in out["queryParams"])
+    code, out, err = run_cli(capsys, "api", "jpm", "jobs", "list", "--help")
+    assert code == 0 and "--job-status" in out and "--completed-on-or-after" in out
+    code, out, err = run_cli(capsys, "api", "jpm", "jobs", "--help")
+    assert code == 0 and "servicetitan api jpm jobs <operation>" in out
+    code, out, err = run_cli(capsys, "api", "accounts")
+    assert code == 2 and "accounting" in json.loads(err)["error"]["hint"]
+    code, out, err = run_cli(capsys, "api", "jpm", "jobs", "list")
+    assert code == 3 and json.loads(err)["error"]["code"] == "CONFIG"  # executing needs credentials
+    code, out, _ = run_cli(capsys, "api", "endpoints", "--search", "customers", "--module", "crm", "--limit", "3")
+    assert code == 0 and out["count"] == 3 and out["endpoints"][0]["command"].startswith("servicetitan api crm")
+    code, out, _ = run_cli(capsys, "api", "modules")
+    assert code == 0 and len(out["modules"]) == 25
 
 
 def test_cli_offline_flow(capsys, isolated_home, demo_path):
@@ -86,9 +215,8 @@ def test_cli_offline_flow(capsys, isolated_home, demo_path):
     names = {c["command"] for c in out["commands"]["subcommands"]}
     assert {"servicetitan metrics", "servicetitan list", "servicetitan api", "servicetitan fetch"} <= names
     assert out["conventions"]["exitCodes"]["7"].startswith("snapshot")
+    assert out["api"]["reads"] >= 320 and any(m["module"] == "jpm" and "jobs" in m["resources"] for m in out["api"]["modules"])
 
-    code, out, _ = run_cli(capsys, "api", "endpoints", "--search", "customers", "--module", "crm-v2", "--limit", "3")
-    assert code == 0 and out["count"] == 3
 
     code, out, _ = run_cli(capsys, "palette", "#2996f4,#ed6d28,#2ca67c", "--compact")
     assert code == 0 and out["ok"] is True

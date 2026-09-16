@@ -15,10 +15,11 @@ who work with them.
 - **Derived metrics, not just raw records.** Revenue, average ticket, close
   rate, AR aging, booking rate, membership attach and more, computed the way the
   bundled dashboard computes them, with `--explain` definitions.
-- **Every ServiceTitan endpoint, read-only.** `servicetitan api get` reaches any
-  of the 330 GET operations in ServiceTitan's public API, with paging and export
-  continuation handled, and a searchable catalogue generated from the official
-  OpenAPI documents.
+- **The whole ServiceTitan API, discoverable step by step.** `servicetitan api`
+  is a command tree generated from ServiceTitan's own OpenAPI documents: modules,
+  then resources, then operations, then every parameter typed and described.
+  All 330 read operations run live; the 270 write operations are listed so an
+  agent can see what exists, but never executed.
 - **The dashboard is still here.** `servicetitan render` writes the same
   single-file operations dashboard the template produced.
 
@@ -79,6 +80,17 @@ No profile at all? Plain environment variables work for CI and sandboxes:
 `SERVICETITAN_TENANT_ID`, `SERVICETITAN_CLIENT_ID`, `SERVICETITAN_CLIENT_SECRET`,
 `SERVICETITAN_APP_KEY` (plus `SERVICETITAN_TIMEZONE`, `SERVICETITAN_ENVIRONMENT`).
 
+## Two kinds of answers
+
+Every response says where it came from:
+
+- `"source": "snapshot"` (`metrics`, `list`, `check`, `render`): computed from
+  the snapshot that `fetch` wrote. Fast, offline, and the only way to get the
+  derived numbers, because they need the whole year of records. Refresh with
+  `fetch --max-age 6`.
+- `"source": "live"` (`api ...`, `auth check`): a request to ServiceTitan right
+  now, for one tenant.
+
 ## Daily use
 
 ```bash
@@ -88,9 +100,31 @@ servicetitan metrics all --explain    # every area, with what each number means
 servicetitan metrics sales --range qtd --tenant TUC
 servicetitan list jobs --range next7 --booked --fields jobNumber,date,customer,revenue
 servicetitan list memberships --renews-within 30
-servicetitan api get jpm/v2/appointments --param startsOnOrAfter=2026-09-16T00:00:00Z --all
+servicetitan api jpm appointments list --starts-on-or-after 2026-09-16T00:00:00Z --all
 servicetitan render --out dashboard.html
 ```
+
+### The API tree
+
+```bash
+servicetitan api                          # 25 modules with what they cover
+servicetitan api jpm                      # resources: jobs, appointments, job-types, projects ...
+servicetitan api jpm jobs                 # operations: list, get, export, history, notes ... (writes marked disabled)
+servicetitan api jpm jobs list --help     # every parameter with its description, type and allowed values
+servicetitan api jpm jobs list --describe # the same contract as JSON, plus response fields (no credentials needed)
+servicetitan api jpm jobs list --job-status Completed --completed-on-or-after 2026-09-01T00:00:00Z --all --fields jobNumber,total
+servicetitan api jpm jobs get 12345
+servicetitan api accounting invoices list --balance-filter-balance 0 --balance-filter-comparer Greater --count
+servicetitan api jpm jobs export --from 2026-01-01           # bulk feed with continuation token
+servicetitan api endpoints --search "technician rating"      # search when you do not know the module
+```
+
+Module aliases work (`sales` for `salestech`, `jobs` for `jpm`, `calls` for
+`telecom`). Parameters are the spec's own names in kebab case; enum values are
+matched case-insensitively and sent with the spec's spelling. Paged operations
+take `--all`, `--max-pages` and `--count`; export feeds take `--from` and
+`--max-batches`; everything takes `--fields` and `--raw`. `api get <path>` is
+still there for a raw path.
 
 Snapshots live in the CLI's config directory (`servicetitan status` shows the
 path). Every query answer carries `snapshot.generatedAt`, `ageHours` and
@@ -110,8 +144,8 @@ snapshot an error instead of a warning.
 | `check` | Snapshot integrity checks; exit 6 on failure. Wire it into unattended refreshes. |
 | `metrics <area>` | `revenue`, `service`, `sales`, `install`, `accounting`, `marketing`, `office`, `memberships`, `all`. |
 | `list <kind>` | `jobs`, `opportunities`, `invoices`, `purchase-orders`, `calls`, `memberships`, `technicians`, `campaigns`, `business-units`, `people`, with filters, `--sort`, `--fields`, `--limit`, `--count`. |
-| `api get <path>` | Any GET endpoint for one tenant. `--param k=v`, `--all` (paging), `--export --from TOKEN` (bulk export feeds), `--raw`. |
-| `api endpoints` / `api modules` | Search the catalogue built from ServiceTitan's OpenAPI documents. |
+| `api <module> <resource> <operation>` | The whole API as a tree; `--help`/`--describe` at every level. Reads run live, writes are listed only. |
+| `api get <path>` / `api endpoints` / `api modules` | Raw path access and catalogue search. |
 | `render` | Build `dashboard.html` (validates first; never overwrites a good dashboard with a broken pull). |
 | `duplicates` | People who may hold two ServiceTitan user records. |
 | `palette` | Accessibility check for chart colours. |
@@ -151,7 +185,7 @@ pointed at. The essentials:
 2. `servicetitan fetch --max-age 6` when the snapshot is stale (minutes for a large tenant).
 3. `servicetitan metrics <area>` for questions with a known answer shape; add `--explain` before quoting a number to a person.
 4. `servicetitan list <kind>` for "which ones" questions; trim payloads with `--fields` and `--limit`.
-5. `servicetitan api endpoints --search ...` then `servicetitan api get ...` for anything the snapshot does not hold.
+5. `servicetitan api <module>` to discover, `--describe` to see a contract, then run the operation for anything the snapshot does not hold.
 
 Ask the CLI itself: `servicetitan schema`. For Claude Code or Cowork, install
 `skills/servicetitan/SKILL.md` as a skill and the agent will reach for the CLI
@@ -178,7 +212,9 @@ print(compute(q, "service")["kpis"]["avgTicket"])
 ```
 
 `ServiceTitanClient` has no write methods; `get`, `get_all`, `get_pages` and
-`export` are the whole surface.
+`export` are the whole surface. `servicetitan_cli.endpoints` exposes the
+catalogue (`resolve_operation`, `describe`, `search`) and
+`servicetitan_cli.apitree.execute` runs an operation from a parsed namespace.
 
 ## Reading the numbers
 
