@@ -1,0 +1,46 @@
+# Scheduled refresh of the ServiceTitan dashboard from GitHub Actions.
+#
+# Copy to .github/workflows/ in a PRIVATE repository, add these repository
+# secrets: SERVICETITAN_TENANT_ID, SERVICETITAN_CLIENT_ID,
+# SERVICETITAN_CLIENT_SECRET, SERVICETITAN_APP_KEY, NETLIFY_AUTH_TOKEN,
+# NETLIFY_SITE_ID. Multi-tenant companies: keep a committed profile export
+# (`servicetitan profile export`) and add suffixed secrets per tenant instead.
+#
+# The CLI reads the SERVICETITAN_* variables directly (no profile needed).
+# `render` refuses to write when the pull fails its integrity checks, so a bad
+# run leaves the previous dashboard in place and the job goes red.
+
+name: Refresh dashboard
+
+on:
+  schedule:
+    - cron: "0 12,17,22 * * 1-5"   # 3x on weekdays, UTC
+  workflow_dispatch:
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    env:
+      SERVICETITAN_TENANT_ID: ${{ secrets.SERVICETITAN_TENANT_ID }}
+      SERVICETITAN_CLIENT_ID: ${{ secrets.SERVICETITAN_CLIENT_ID }}
+      SERVICETITAN_CLIENT_SECRET: ${{ secrets.SERVICETITAN_CLIENT_SECRET }}
+      SERVICETITAN_APP_KEY: ${{ secrets.SERVICETITAN_APP_KEY }}
+      SERVICETITAN_COMPANY_NAME: "Acme Home Services"
+      SERVICETITAN_TIMEZONE: "America/Denver"
+      SERVICETITAN_SECRETS: file
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install "git+https://github.com/xlzuvekas/servicetitan-cli"
+      - name: Pull and render
+        run: |
+          servicetitan auth check --quiet > /dev/null
+          servicetitan fetch --quiet > fetch.json
+          servicetitan check --quiet > /dev/null
+          mkdir -p site
+          servicetitan render --out site/index.html --quiet
+      - name: Deploy to Netlify
+        run: |
+          npx --yes netlify-cli deploy --prod --dir site \
+            --site "${{ secrets.NETLIFY_SITE_ID }}" --auth "${{ secrets.NETLIFY_AUTH_TOKEN }}"

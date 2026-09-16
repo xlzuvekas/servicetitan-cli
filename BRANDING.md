@@ -2,16 +2,18 @@
 
 The default theme is deliberately neutral — considered, but not anyone's brand.
 Three things make it yours: the wordmark or logo, the colour tokens, and the
-type. All three live in `dashboard_template.html`, near the top.
+type. All three live in the dashboard template, near the top.
 
-Re-run `python render_dashboard.py` after any change.
+Re-run `servicetitan render` after any change. The template lives at
+`src/servicetitan_cli/data/dashboard_template.html`; pass a copy with
+`servicetitan render --template my_template.html` to keep edits outside the package.
 
 ---
 
 ## 1. Name and logo
 
-**With no logo files**, the header shows `company.name` from `config.json` set
-as a wordmark. For many companies that is enough.
+**With no logo files**, the header shows the profile's company name set as a
+wordmark. For many companies that is enough.
 
 **To use a logo**, drop one or both of these in:
 
@@ -19,6 +21,9 @@ as a wordmark. For many companies that is enough.
 brand/logo-light.png     shown on light backgrounds
 brand/logo-dark.png      shown on dark backgrounds
 ```
+
+(`brand/` is relative to where you run `servicetitan render`; change it with
+`--brand-dir`.)
 
 They are inlined into the HTML at render time, so the output stays a single
 portable file.
@@ -36,7 +41,7 @@ portable file.
 
 ## 2. Colours
 
-Open `dashboard_template.html` and find the block marked `THEME TOKENS`. There
+Open the template and find the block marked `THEME TOKENS`. There
 are three copies of the palette — the base `:root`, a
 `@media (prefers-color-scheme: dark)` block, and a `:root[data-theme="dark"]`
 block. **Edit all three**, or one theme will keep the old colours.
@@ -70,11 +75,11 @@ distinguishable, including for colour-blind readers. The defaults were checked
 against five measurable criteria and pass in both themes. **If you change
 `--series-*`, re-check rather than trusting your eye.**
 
-Run `validate_palette.py` (included):
+Run the built-in check:
 
 ```bash
-python validate_palette.py "#2996f4,#ed6d28,#2ca67c,#8e2af1,#b39128" --mode light --surface "#ffffff"
-python validate_palette.py "#2996f4,#e86b27,#2ead82,#8e2af1,#af8e27" --mode dark  --surface "#15171a"
+servicetitan palette "#2996f4,#ed6d28,#2ca67c,#8e2af1,#b39128" --mode light --surface "#ffffff"
+servicetitan palette "#2996f4,#e86b27,#2ead82,#8e2af1,#af8e27" --mode dark  --surface "#15171a"
 ```
 
 It checks each colour's lightness band, chroma floor and contrast against its
@@ -136,16 +141,16 @@ Two strings are worth a look:
 
 - The footer note, in `buildChrome()` near the bottom of the template.
 - The scorecard caption, built by `targetCaption()` from your configured
-  targets — it reads correctly on its own once `config.json` is set.
+  targets (`servicetitan profile set <name> --targets '{...}'`).
 
 ---
 
 ## Checklist
 
-- [ ] `company.name` and `subtitle` set in `config.json`
+- [ ] company name and subtitle set (`servicetitan profile set <name> --company ... --subtitle ...`)
 - [ ] Logos in `brand/`, or wordmark is what you want
 - [ ] Colours edited in **all three** token blocks
-- [ ] `validate_palette.py` passes for light **and** dark
+- [ ] `servicetitan palette` passes for light **and** dark
 - [ ] Type tokens set, with a system fallback
 - [ ] Viewed in both light and dark mode
 - [ ] Viewed at a narrow width — tiles wrap, tables scroll

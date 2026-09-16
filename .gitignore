@@ -1,18 +1,24 @@
-# Credentials - never commit these.
+# Credentials and local settings from the legacy layout. Never commit these.
 .env
-
-# Your own settings, and anything the scripts generate from your live data.
-# These contain real customer names, employee names and revenue figures.
 config.json
-live_data.json
-dashboard.html
-demo_data.json
 
-# Your brand assets. Delete these lines if you want your logos version-controlled
-# in a PRIVATE repo; keep them if this repo is public or shared.
+# Generated data: real customer names, employee names and revenue figures.
+live_data.json
+demo_data.json
+dashboard.html
+*.snapshot.json
+
+# Brand assets (delete these lines in a PRIVATE repo if you want logos versioned).
 brand/logo-light.png
 brand/logo-dark.png
 
+# Python
 __pycache__/
 *.pyc
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.venv/
+venv/
 .DS_Store
