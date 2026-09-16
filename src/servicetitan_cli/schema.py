@@ -17,7 +17,7 @@ def _actions(parser):
             continue
         item = {"name": a.dest, "flags": list(a.option_strings) or None,
                 "help": (a.help or "").replace("%(default)s", str(a.default)) if a.help != argparse.SUPPRESS else None,
-                "required": bool(getattr(a, "required", False)) and not a.option_strings or bool(getattr(a, "required", False))}
+                "required": bool(getattr(a, "required", False))}
         if a.choices:
             item["choices"] = list(a.choices)
         if a.default not in (None, argparse.SUPPRESS, False):
