@@ -49,7 +49,16 @@ Python 3.9+, `requests` + `keyring` only. Source in `src/servicetitan_cli/`, tes
   Index and results directories are owner-only. LlamaIndex stays an optional
   extra; core commands must work without it.
 - **stdout is one JSON document.** Progress, warnings and errors go to stderr.
-  Use `output.progress`, never `print`.
+  Use `output.progress`, never `print`. The one exception is `servicetitan
+  mcp`, whose stdout carries only MCP protocol messages; tool runs redirect any
+  stray print to stderr.
+- **The MCP server is the CLI.** `mcp_server.py` (server name st-operator, an
+  independent third-party integration) runs every tool through
+  `cli.run_captured`, the same path as the command line, so answers and errors
+  match. Keep the tool list short: hosts load every tool description into the
+  model's context. Parser-backed tools read their schemas from argparse. Writes
+  go only through `api_write`, which previews by default; `--read-only` leaves
+  it out. `tests/test_mcp.py` includes a real stdio session.
 - **Errors are `CliError` subclasses** with a code, exit status and a hint that
   says what to do. See `errors.py` and keep the exit-code table in sync with
   `README.md` and `schema.py`.
@@ -73,6 +82,7 @@ Python 3.9+, `requests` + `keyring` only. Source in `src/servicetitan_cli/`, tes
 | `writes.py` | Write policy: allowlist patterns, request-body assembly and validation, terminal confirmation, audit log. |
 | `catalogue.py` | Builds a catalogue from OpenAPI documents (naming rules, hashes, versions, deprecation), refreshes from the live portal into the config dir, diffs two catalogues. |
 | `indexing.py` | Local LlamaIndex: documents from snapshot records, saved results (`--save`), the catalogue, definitions and docs; build/update, status, results store; hybrid query (vectors + BM25 `lexical.json`, RRF fusion, rare identifiers pinned, optional local cross-encoder). Lazy imports; `hash` embeddings for tests. |
+| `mcp_server.py` | `servicetitan mcp`: MCP over stdio (JSON-RPC lines), ten tools mapped onto CLI commands, progress notifications, oversize answers saved locally, `--client-config` for Claude Desktop and Claude Code. |
 | `onboarding.py` | `servicetitan setup` (the interactive wizard: prompts on stderr, secrets via getpass, test before save) and `servicetitan init` (offline checklist with the next command). |
 | `brief.py` | `servicetitan brief`: a selection from the metrics areas for one-call orientation; no new math. |
 | `render.py` + `data/dashboard_template.html` | The single-file dashboard. |

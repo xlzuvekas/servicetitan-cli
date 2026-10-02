@@ -9,10 +9,13 @@ Design rules, all in service of agents driving this tool:
 * ``servicetitan schema`` describes every command, so one call teaches the tool.
 """
 import argparse
+import collections
+import contextlib
 import getpass
 import json
 import os
 import sys
+import threading
 
 from . import __version__
 from .config import Context
@@ -338,6 +341,18 @@ def build_parser():
     x = _sub(ips, "results", "saved command results (--save): list them, or --show one")
     x.add_argument("--limit", type=int, default=50)
     x.add_argument("--show", metavar="FILE", help="print one saved result (file name or prefix)")
+
+    # ---- MCP
+    x = _sub(sub, "mcp", "serve these tools to Claude Desktop, Claude Code or any MCP client over stdio "
+                         "(server name st-operator)",
+             description="Runs a local Model Context Protocol server on stdin and stdout, named st-operator. An MCP "
+                         "client starts it; `servicetitan mcp --client-config` prints what to add to Claude Desktop or Claude "
+                         "Code. Every tool runs the same code as the matching command. Writes go through api_write, "
+                         "which previews unless told otherwise, and the profile's write policy still applies. "
+                         "st-operator is an independent, third-party integration, not affiliated with ServiceTitan.")
+    x.add_argument("--client-config", action="store_true",
+                   help="print how to add this server to Claude Desktop, Claude Code or another MCP client, then exit")
+    x.add_argument("--read-only", action="store_true", help="leave the api_write tool out entirely")
 
     # ---- misc
     x = _sub(sub, "palette", "validate chart colours for accessibility (band, chroma, contrast, colour-blind separation)")
@@ -1060,6 +1075,17 @@ def cmd_index(ctx, args):
     raise UsageError("index needs an action", hint="build, status, query or results")
 
 
+def cmd_mcp(ctx, args):
+    from . import mcp_server
+    if args.client_config:
+        return mcp_server.client_config(read_only=args.read_only)
+    if sys.stdin.isatty():
+        progress("%s: an MCP server on stdin and stdout. MCP clients start it themselves; `servicetitan mcp --client-config` "
+                 "shows how to add it. Ctrl+C stops it." % mcp_server.SERVER_NAME, ctx.quiet)
+    mcp_server.serve(read_only=args.read_only, default_profile=_opt(args, "profile"))
+    return None
+
+
 def cmd_palette(ctx, args):
     from .palette import validate_palette
     try:
@@ -1095,10 +1121,98 @@ def cmd_init(ctx, args):
 HANDLERS = {"profile": cmd_profile, "tenant": cmd_tenant, "auth": cmd_auth, "status": cmd_status, "fetch": cmd_fetch,
             "check": cmd_check, "render": cmd_render, "duplicates": cmd_duplicates,
             "metrics": cmd_metrics, "list": cmd_list, "api": cmd_api, "palette": cmd_palette, "schema": cmd_schema,
-            "init": cmd_init, "setup": cmd_setup, "brief": cmd_brief, "index": cmd_index}
+            "init": cmd_init, "setup": cmd_setup, "brief": cmd_brief, "index": cmd_index, "mcp": cmd_mcp}
 
 
 # ---------------------------------------------------------------- main
+def _dispatch(args, argv, parser, quiet):
+    """Run a parsed command. Returns (result, ctx); result None means the command printed its own output."""
+    ctx = Context(profile=_opt(args, "profile"), config_path=_opt(args, "config"), env_file=_opt(args, "env_file"),
+                  data_path=_opt(args, "data"), as_of=_opt(args, "as_of"), secrets_backend=_opt(args, "secrets"),
+                  quiet=quiet)
+    handler = HANDLERS[args.command]
+    result = handler(ctx, args, parser) if args.command == "schema" else handler(ctx, args)
+    for w in ctx.warnings:
+        progress("warning: %s" % w, quiet)
+    if result is None:
+        return None, ctx
+    if _opt(args, "save") and args.command not in ("index", "schema"):
+        from . import indexing
+        words = [args.command] + [str(getattr(args, a)) for a in ("kind", "area", "profile_cmd", "tenant_cmd", "auth_cmd")
+                                  if getattr(args, a, None)]
+        words += [r for r in (getattr(args, "rest", None) or [])[:3] if not str(r).startswith("-")]
+        saved = indexing.save_result(ctx, list(argv if argv is not None else sys.argv[1:]), result,
+                                     label=_opt(args, "save_label"), quiet=quiet, words=words)
+        if isinstance(result, dict):
+            result["saved"] = saved
+        else:
+            result = {"result": result, "saved": saved}
+        progress("saved %s%s" % (saved["path"], " (indexed)" if saved.get("indexed") else ""), quiet)
+    return result, ctx
+
+
+class _StderrTail(object):
+    """Pass-through for stderr that remembers the last lines, so argparse's message can be returned as data."""
+
+    def __init__(self, stream, keep=40):
+        self.stream = stream
+        self.lines = collections.deque(maxlen=keep)
+        self._partial = ""
+        self._lock = threading.Lock()
+
+    def write(self, text):
+        with self._lock:
+            self.stream.write(text)
+            self._partial += text
+            *done, self._partial = self._partial.split("\n")
+            self.lines.extend(line for line in done if line.strip())
+        return len(text)
+
+    def flush(self):
+        self.stream.flush()
+
+    def isatty(self):
+        return False
+
+    def usage_error(self):
+        for line in reversed(list(self.lines) + [self._partial]):
+            if ": error: " in line:
+                return line.split(": error: ", 1)[1].strip()
+        return None
+
+
+def run_captured(argv):
+    """Parse and run one command in-process without printing its result (the MCP server's way in).
+
+    Returns {"ok": True, "result": ..., "warnings": [...]} or {"ok": False, "error": {code, exit, message, hint}}.
+    Argument errors, which argparse reports by exiting, come back as USAGE errors.
+    """
+    parser = build_parser()
+    tail = _StderrTail(sys.stderr)
+    try:
+        with contextlib.redirect_stderr(tail):
+            args = parser.parse_args(argv)
+            if not args.command:
+                raise UsageError("No command given")
+            result, ctx = _dispatch(args, argv, parser, quiet=False)
+        return {"ok": True, "result": result, "warnings": list(ctx.warnings)}
+    except CliError as e:
+        return {"ok": False, "error": e.to_dict()["error"]}
+    except SystemExit as e:
+        if e.code in (0, None):
+            return {"ok": True, "result": None, "warnings": []}
+        return {"ok": False, "error": {"code": "USAGE", "exit": 2,
+                                       "message": tail.usage_error() or "invalid arguments: %s" % " ".join(argv),
+                                       "hint": "Check the argument names and values against the tool's input schema."}}
+    except KeyboardInterrupt:
+        raise
+    except Exception as e:  # pragma: no cover - last resort, mirrors main()
+        if os.environ.get("SERVICETITAN_DEBUG"):
+            raise
+        return {"ok": False, "error": {"code": "INTERNAL", "exit": 1, "message": "%s: %s" % (type(e).__name__, e),
+                                       "hint": "Set SERVICETITAN_DEBUG=1 for a traceback."}}
+
+
 def main(argv=None):
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -1109,27 +1223,9 @@ def main(argv=None):
         parser.print_help()
         return 2
     try:
-        ctx = Context(profile=_opt(args, "profile"), config_path=_opt(args, "config"), env_file=_opt(args, "env_file"),
-                      data_path=_opt(args, "data"), as_of=_opt(args, "as_of"), secrets_backend=_opt(args, "secrets"),
-                      quiet=quiet)
-        handler = HANDLERS[args.command]
-        result = handler(ctx, args, parser) if args.command == "schema" else handler(ctx, args)
-        for w in ctx.warnings:
-            progress("warning: %s" % w, quiet)
+        result, ctx = _dispatch(args, argv, parser, quiet)
         if result is None:
             return 0
-        if _opt(args, "save") and args.command not in ("index", "schema"):
-            from . import indexing
-            words = [args.command] + [str(getattr(args, a)) for a in ("kind", "area", "profile_cmd", "tenant_cmd", "auth_cmd")
-                                      if getattr(args, a, None)]
-            words += [r for r in (getattr(args, "rest", None) or [])[:3] if not str(r).startswith("-")]
-            saved = indexing.save_result(ctx, list(argv if argv is not None else sys.argv[1:]), result,
-                                         label=_opt(args, "save_label"), quiet=quiet, words=words)
-            if isinstance(result, dict):
-                result["saved"] = saved
-            else:
-                result = {"result": result, "saved": saved}
-            progress("saved %s%s" % (saved["path"], " (indexed)" if saved.get("indexed") else ""), quiet)
         fmt = _opt(args, "format") or os.environ.get("SERVICETITAN_FORMAT") or "json"
         compact = bool(_opt(args, "compact"))
         if args.command in ("tenant", "profile", "setup") and ctx.secrets_selected() and ctx.secrets.fallback_reason:

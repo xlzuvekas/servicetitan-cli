@@ -121,6 +121,15 @@ servicetitan api audit --limit 5                                         # what 
 - Do not ask for the policy to be widened beyond the operation at hand, and
   never suggest `*`.
 
+## Through MCP
+
+When the st-operator MCP server is connected (`servicetitan mcp`), its tools
+are these commands under other names: `status` (init and status), `brief`,
+`metrics`, `list_records`, `search` (index query), `saved_results`, `refresh`
+(fetch), `api_discover`, `api_read` and `api_write`. The rules on this page
+apply unchanged. `api_write` previews unless you pass `dry_run: false`; pass
+that only when the person asked for the change.
+
 ## Remembering and searching
 
 `--save` on any command keeps its result under the config directory with the

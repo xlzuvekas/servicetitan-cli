@@ -4,6 +4,9 @@ A ServiceTitan command-line tool built for AI agents and the people who work
 with them. It reads by default; a write runs only behind an explicit flag, a
 per-profile allowlist and the matching API scope.
 
+It is an independent, third-party tool: not made, endorsed or supported by
+ServiceTitan.
+
 **Setting it up for the first time?** Follow [SETUP.md](SETUP.md). Or give this
 folder, or its zip, to Claude and say "help me set this up": SETUP.md tells
 Claude how to walk you through it one step at a time, and your secrets never go
@@ -30,6 +33,9 @@ into the chat.
   credential: whatever write scopes the tenant admin granted the app is
   exactly what the CLI can write. `--dry-run` previews and an audit log
   records.
+- **Works in any MCP client.** `servicetitan mcp` serves the same answers to
+  Claude Desktop, Claude Code and other MCP clients as a local server named
+  st-operator, with ten tools instead of six hundred.
 - **It remembers what it finds.** `--save` on any command keeps the result on
   disk, and an optional local LlamaIndex makes every stored record, saved
   result, API operation and definition searchable by meaning, with embeddings
@@ -279,6 +285,7 @@ snapshot an error instead of a warning.
 | `api <module> <resource> <operation>` | The whole API as a tree; `--help`/`--describe` at every level. Reads run live; writes need `--write`, an allowlist match and the `:w` scope, with `--dry-run` to preview. |
 | `api get <path>` / `api endpoints` / `api modules` / `api audit` | Raw path access, catalogue search and the write audit log. |
 | `render` | Build `dashboard.html` (validates first; never overwrites a good dashboard with a broken pull). |
+| `mcp` | Local MCP server (st-operator) over stdio; `--client-config` prints client setup, `--read-only` drops the write tool. |
 | `index build/status/query/results` | Local semantic index over stored records, saved results, the API catalogue, definitions and docs (optional extra). |
 | `duplicates` | People who may hold two ServiceTitan user records. |
 | `palette` | Accessibility check for chart colours. |
@@ -310,6 +317,44 @@ reproduced later.
 | 7 | snapshot missing or stale |
 
 Errors go to stderr as `{"error": {"code", "exit", "message", "hint", "details"}}`.
+
+## Use it from Claude Desktop or any MCP client
+
+`servicetitan mcp` runs a local MCP server named **st-operator** on stdin and
+stdout. The MCP client starts it as a subprocess; nothing listens on the
+network. st-operator is an independent, third-party integration, not made,
+endorsed or supported by ServiceTitan.
+
+```bash
+servicetitan mcp --client-config    # what to add to Claude Desktop, and the Claude Code command
+```
+
+- **Claude Desktop:** Settings > Developer > Edit Config, merge the printed
+  `add` block into the file, save, and restart Claude Desktop.
+- **Claude Code:** run the printed `claude mcp add st-operator -- ...` line.
+- **Other clients:** use the printed command and arguments. The path is
+  absolute because desktop apps start servers without your shell's PATH.
+
+| Tool | Same as |
+|---|---|
+| `status` | `init` and `status`: what is set up, snapshot age, the next command |
+| `brief` | `brief` |
+| `metrics` | `metrics <area>` |
+| `list_records` | `list <kind>` with its filters |
+| `search` | `index query` |
+| `saved_results` | `index results` |
+| `refresh` | `fetch`, skipping the pull when the snapshot is under 6 hours old by default |
+| `api_discover` | `api`, `api <module>`, `api <module> <resource>`, `--describe`, `api endpoints --search` |
+| `api_read` | any read operation in the API tree, or `api get <path>` |
+| `api_write` | any write operation, previewed unless `dry_run` is false |
+
+Every tool runs the same code as the matching command, so the answers, errors
+and hints are identical, and the input schemas of the snapshot tools are read
+from the command's own options. `save: true` keeps any result for `search`
+later; an answer too large for one reply is kept the same way and summarised.
+Long pulls report progress to clients that ask for it. `api_write` keeps all
+three write gates, with the call to `api_write` itself standing in for
+`--write`, and `servicetitan mcp --read-only` leaves the tool out entirely.
 
 ## For agents
 

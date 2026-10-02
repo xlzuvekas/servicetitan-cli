@@ -69,6 +69,10 @@ to `servicetitan index query "<words>" [--kind invoices,result,api]`: it returns
 matching records, saved results, API operations and definitions with a `next`
 command for each; run that command before quoting a figure.
 
+If the st-operator MCP tools are connected, they are the same commands:
+`status`, `brief`, `metrics`, `list_records`, `search`, `api_discover`,
+`api_read` and `api_write`, which previews unless `dry_run` is false.
+
 ## Writes
 
 Write operations (POST, PUT, PATCH, DELETE) are marked gated in the tree. They

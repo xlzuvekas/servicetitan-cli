@@ -3,7 +3,8 @@
 `servicetitan` is a command-line tool that reads a company's ServiceTitan data
 and answers questions about it: revenue, service calls, sales, receivables,
 memberships and call handling. You can run it yourself in a terminal, or let an
-AI assistant such as Claude run it for you.
+AI assistant such as Claude run it for you. It is an independent, third-party
+tool, not made or supported by ServiceTitan.
 
 Setup takes about half an hour, most of it in ServiceTitan getting the API
 credentials. When you finish:
@@ -45,6 +46,8 @@ with you before moving on.
    next. Read it with them before trying anything else; the troubleshooting
    table at the end covers the common cases.
 6. Finish with step 6, then point them at the "Daily use" section of README.md.
+   If they want Claude Desktop to use it, continue with "Optional: connect
+   Claude Desktop" below.
 
 ## Step 1: Check for Python
 
@@ -194,6 +197,24 @@ live numbers. Copy the `skills/servicetitan` folder from this folder into your
 Claude skills folder: `~/.claude/skills/` on macOS and Linux,
 `%USERPROFILE%\.claude\skills\` on Windows. Then ask Claude Code something like
 "how did service do this month?" and it will use the tool on its own.
+
+## Optional: connect Claude Desktop
+
+Claude Desktop reaches local tools through MCP, and the tool includes an MCP
+server called st-operator.
+
+1. Run `servicetitan mcp --client-config`. It prints a block to add and where
+   Claude Desktop keeps its configuration file.
+2. In Claude Desktop, open **Settings > Developer > Edit Config**. Merge the
+   printed `add` block into the file, keeping any servers already there, and
+   save.
+3. Restart Claude Desktop. The tools appear under st-operator.
+
+**You should see** st-operator listed with its tools in Claude Desktop's
+settings. Ask "what does the ServiceTitan status look like?" to try it.
+
+To leave out the one tool that can change ServiceTitan data, run
+`servicetitan mcp --client-config --read-only` instead.
 
 ## What is stored where
 
