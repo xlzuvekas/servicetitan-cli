@@ -54,7 +54,7 @@ class FakeSession(object):
 
 
 def creds(env="production"):
-    return Credentials("SD", "San Diego", "555", "cid", "secret", "appkey", env)
+    return Credentials("NORTH", "North Branch", "555", "cid", "secret", "appkey", env)
 
 
 def client(script, env="production", **kw):
@@ -94,7 +94,7 @@ def test_reads_never_send_anything_but_get_to_the_api_host():
 
 
 def _authorization():
-    return WriteAuthorization("acme", "SD", "jpm jobs create", "tn.jpm.jobs:w",
+    return WriteAuthorization("acme", "NORTH", "jpm jobs create", "tn.jpm.jobs:w",
                               {"flag": "--write", "allowlist": "jpm/jobs", "scope": "granted"})
 
 

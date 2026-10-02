@@ -22,6 +22,10 @@ from .output import emit, emit_error, progress, redact
 from .paths import snapshot_path
 
 EXAMPLES = """
+first time on this machine:
+  servicetitan setup                        # asks for the four ServiceTitan values, hides secrets, tests, pulls
+  servicetitan init                         # checklist: what is done and the next command to run
+
 examples:
   servicetitan profile add acme --company "Acme Home Services" --timezone America/Denver
   servicetitan tenant add acme --code MAIN --label "Main Office" --tenant-id 123456789 \\
@@ -91,6 +95,18 @@ def build_parser():
     _common(root)
     sub = root.add_subparsers(dest="command", metavar="<command>")
 
+    # ---- first run
+    x = _sub(sub, "setup", "connect a company step by step at a terminal: asks for the four ServiceTitan values, "
+                           "hides secrets, tests the connection, offers the first pull",
+             description="Interactive setup for a person at a terminal. Secrets are typed into hidden prompts and "
+                         "saved to the OS password store; nothing is saved until the connection test passes or you "
+                         "choose to keep the values anyway. Run it again to add another ServiceTitan account. "
+                         "Agents and scripts use `profile add` and `tenant add` instead (see `servicetitan init`).")
+    x.add_argument("--environment", choices=("production", "integration"),
+                   help="ServiceTitan environment for a new company (default production; integration is the sandbox)")
+    x.add_argument("--no-fetch", action="store_true", help="do not offer the first data pull")
+    _sub(sub, "init", "checklist for this machine: what is set up, what is next, and the command to run now")
+
     # ---- profiles
     p = _sub(sub, "profile", "manage company profiles (each holds one or more tenants)")
     ps = p.add_subparsers(dest="profile_cmd", metavar="<action>")
@@ -143,8 +159,8 @@ def build_parser():
                          "Pass them on stdin (--client-secret-stdin/--app-key-stdin read one line each, in that order), "
                          "from environment variables (--client-secret-env VAR), or interactively when stdin is a terminal.")
     x.add_argument("name", nargs="?", help="profile name (default: the default profile)")
-    x.add_argument("--code", required=True, help="short unique code, e.g. MAIN or SD (prefixes every record id)")
-    x.add_argument("--label", help="display name, e.g. 'San Diego' (default: the code)")
+    x.add_argument("--code", required=True, help="short unique code, e.g. MAIN or NORTH (prefixes every record id)")
+    x.add_argument("--label", help="display name, e.g. 'North Branch' (default: the code)")
     x.add_argument("--tenant-id", required=True, help="numeric tenant id from ServiceTitan")
     x.add_argument("--client-id", required=True, help="OAuth client id from API Application Access")
     x.add_argument("--client-secret", help="client secret (prefer --client-secret-stdin; this lands in shell history)")
@@ -330,7 +346,6 @@ def build_parser():
     x.add_argument("--surface", help="chart surface colour (defaults per mode)")
     x.add_argument("--pairs", choices=("adjacent", "all"), default="adjacent")
     x = _sub(sub, "schema", "machine-readable description of every command, output convention and metric definition")
-    x = _sub(sub, "init", "print a step-by-step setup guide for this machine (state-aware)")
     return root
 
 
@@ -592,6 +607,8 @@ def cmd_tenant(ctx, args):
                 rep = ServiceTitanClient(creds).check()
                 result["verified"] = True
                 result["businessUnits"] = len(rep["businessUnits"])
+                from .onboarding import record_verified
+                record_verified(store, name, [tenant["code"]])
             except CliError as e:
                 result["verified"] = False
                 result["verifyError"] = e.to_dict()["error"]
@@ -645,6 +662,7 @@ def cmd_auth(ctx, args):
     mapping = ctx.config["departmentMapping"]
     results = []
     ok_all = True
+    verified = []
     for t in ctx.select_tenants(_opt(args, "tenant")):
         entry = {"tenant": t["code"], "label": t.get("label")}
         try:
@@ -656,6 +674,7 @@ def cmd_auth(ctx, args):
             for u in rep["businessUnits"]:
                 buckets.setdefault(dept_for_business_unit(u.get("name"), mapping) or "EXCLUDED", []).append(u.get("name"))
             entry.update({"ok": True, "businessUnits": len(rep["businessUnits"]), "classification": buckets})
+            verified.append(t["code"])
             if rep.get("grantedScopes") is not None:
                 missing = missing_scopes(rep["grantedScopes"], FETCH_ENDPOINTS)
                 entry["scopes"] = {"granted": len(rep["grantedScopes"]), "missingForFetch": missing,
@@ -676,6 +695,9 @@ def cmd_auth(ctx, args):
             entry.update({"ok": False, "error": e.to_dict()["error"]})
         results.append(entry)
     out = {"profile": ctx.profile_name, "source": ctx.source, "ok": ok_all, "tenants": results}
+    if ctx.source == "store":
+        from .onboarding import record_verified
+        record_verified(ctx.store, ctx.profile_name, verified)
     if not ok_all:
         from .errors import AuthError
         err = AuthError("%d of %d tenant(s) failed to authenticate" % (sum(1 for r in results if not r["ok"]), len(results)),
@@ -1054,44 +1076,26 @@ def cmd_schema(ctx, args, parser=None):
     return build_schema(parser or build_parser())
 
 
+def cmd_setup(ctx, args):
+    from .onboarding import run_setup
+
+    def fetch_now(name):
+        fresh = Context(profile=name, quiet=ctx.quiet, store_path=ctx.store.path)
+        return cmd_fetch(fresh, argparse.Namespace(max_age=None, out=None, max_pages=100, page_size=200, workers=4,
+                                                   index=False))
+    return run_setup(ctx, profile=_opt(args, "profile"), environment=args.environment, offer_fetch=not args.no_fetch,
+                     fetch_fn=fetch_now)
+
+
 def cmd_init(ctx, args):
-    steps = []
-    try:
-        cfg = ctx.config
-        steps.append({"done": True, "step": "profile", "detail": "using profile %r from %s" % (cfg.get("profile"), ctx.source)})
-        if not ctx.tenants:
-            steps.append({"done": False, "step": "tenant", "detail": "add a tenant: servicetitan tenant add %s --code MAIN --tenant-id ... --client-id ... --client-secret-stdin --app-key-stdin" % cfg.get("profile")})
-        else:
-            for t in ctx.tenants:
-                try:
-                    ctx.credentials_for(t)
-                    steps.append({"done": True, "step": "credentials:%s" % t["code"], "detail": "all four values present"})
-                except CliError as e:
-                    steps.append({"done": False, "step": "credentials:%s" % t["code"], "detail": e.message, "hint": e.hint})
-    except ConfigError as e:
-        steps.append({"done": False, "step": "profile", "detail": e.message, "hint": e.hint})
-    if os.path.exists(ctx.data_path if steps and steps[0]["done"] else "live_data.json"):
-        steps.append({"done": True, "step": "snapshot", "detail": "snapshot present; run `servicetitan status`"})
-    else:
-        steps.append({"done": False, "step": "snapshot", "detail": "run `servicetitan auth check`, then `servicetitan fetch`"})
-    return {
-        "steps": steps,
-        "howToGetCredentials": [
-            "1. Sign in at https://developer.servicetitan.io with your ServiceTitan login (choose the production environment).",
-            "2. Register an app: organization name/website/email, app name (e.g. 'Claude'), description, then under API scopes tick every READ scope you need (Tenant APIs).",
-            "3. Add your tenant id(s) to the app. Saving generates the APP KEY (shown on the app page).",
-            "4. In ServiceTitan: Settings > Integrations > API Application Access > Connect New App, pick the app, complete the required dropdowns, Allow Access.",
-            "5. Still there, generate the CLIENT ID and CLIENT SECRET for the app (the secret is shown once). The TENANT ID is on the same page.",
-            "6. servicetitan profile add <name> --company ... ; servicetitan tenant add <name> --code MAIN --tenant-id <id> --client-id <id> (secrets via stdin, env or prompt).",
-            "7. servicetitan auth check ; servicetitan fetch ; servicetitan metrics all",
-        ],
-    }
+    from .onboarding import checklist
+    return checklist(ctx)
 
 
 HANDLERS = {"profile": cmd_profile, "tenant": cmd_tenant, "auth": cmd_auth, "status": cmd_status, "fetch": cmd_fetch,
             "check": cmd_check, "render": cmd_render, "duplicates": cmd_duplicates,
             "metrics": cmd_metrics, "list": cmd_list, "api": cmd_api, "palette": cmd_palette, "schema": cmd_schema,
-            "init": cmd_init, "brief": cmd_brief, "index": cmd_index}
+            "init": cmd_init, "setup": cmd_setup, "brief": cmd_brief, "index": cmd_index}
 
 
 # ---------------------------------------------------------------- main
@@ -1128,7 +1132,7 @@ def main(argv=None):
             progress("saved %s%s" % (saved["path"], " (indexed)" if saved.get("indexed") else ""), quiet)
         fmt = _opt(args, "format") or os.environ.get("SERVICETITAN_FORMAT") or "json"
         compact = bool(_opt(args, "compact"))
-        if args.command in ("tenant", "profile") and ctx.secrets_selected() and ctx.secrets.fallback_reason:
+        if args.command in ("tenant", "profile", "setup") and ctx.secrets_selected() and ctx.secrets.fallback_reason:
             progress("note: secrets are kept in %s because the OS keyring is unavailable (%s)"
                      % (ctx.secrets.detail, ctx.secrets.fallback_reason), quiet)
         emit(result, fmt=fmt, pretty=not compact)

@@ -4,8 +4,13 @@ A ServiceTitan command-line tool built for AI agents and the people who work
 with them. It reads by default; a write runs only behind an explicit flag, a
 per-profile allowlist and the matching API scope.
 
+**Setting it up for the first time?** Follow [SETUP.md](SETUP.md). Or give this
+folder, or its zip, to Claude and say "help me set this up": SETUP.md tells
+Claude how to walk you through it one step at a time, and your secrets never go
+into the chat.
+
 - **Multi-tenant.** One machine can hold many companies (*profiles*), each with
-  one or more ServiceTitan accounts (*tenants*). `--profile viking --tenant TUC`.
+  one or more ServiceTitan accounts (*tenants*). `--profile acme --tenant NORTH`.
 - **Secrets stay out of files.** Client secrets and app keys go to the OS
   credential store (Windows Credential Manager, macOS Keychain, Linux Secret
   Service). Where no keyring exists they go to an owner-only file, and the CLI
@@ -39,21 +44,44 @@ resources, and only on calls that carry `--write`; see [Writes](#writes).
 
 ## Install
 
+From this folder, or an unzipped copy of it:
+
 ```bash
-pip install git+https://github.com/xlzuvekas/servicetitan-cli
+pipx install .              # recommended: its own environment, and `servicetitan` lands on PATH
+python -m pip install .     # also works
 servicetitan --version
 ```
 
-Python 3.9 or newer. Windows, macOS and Linux. `pipx install` works too. Add
-`[index]` for the local semantic index (Python 3.10 or newer).
+With access to the GitHub repository:
+`pipx install git+https://github.com/xlzuvekas/servicetitan-cli@main`.
+
+Python 3.9 or newer on Windows, macOS or Linux. Add `[index]` for the local
+semantic search, for example `pipx install ".[index]"`; it needs Python 3.10 to
+3.12. [SETUP.md](SETUP.md) is the step-by-step version, including installing
+Python and pipx. If `servicetitan` is not on PATH after a plain pip install,
+`python -m servicetitan_cli` runs the same commands.
 
 ## Connect a company
 
 You need four values per tenant: **app key**, **client id**, **client secret**
 and **tenant id**. [docs/setup-servicetitan-api-access.md](docs/setup-servicetitan-api-access.md)
 walks through getting them from the developer portal and ServiceTitan settings
-(about ten minutes, done once per company). `servicetitan init` prints the same
-steps and tells you what is still missing on this machine.
+(about ten minutes, done once per company).
+
+At a terminal, run:
+
+```bash
+servicetitan setup
+```
+
+It asks for the company and the four values one at a time, reads the client
+secret and app key through hidden prompts, tests the connection before saving
+anything, shows how your business units will be grouped, and offers the first
+data pull. Run it again to add a second ServiceTitan account to the same
+company. `servicetitan init` shows what is done and the next command to run at
+any point.
+
+Scripts, CI and agents use the same steps without prompts:
 
 ```bash
 servicetitan profile add acme --company "Acme Home Services" --timezone America/Denver --use
@@ -99,7 +127,7 @@ servicetitan fetch --max-age 6        # pull a snapshot unless one is younger th
 servicetitan status                   # profile, tenants, snapshot age and counts
 servicetitan brief                    # today, next 7 days, month to date, receivables, memberships, flags
 servicetitan metrics all --explain    # every area, with what each number means
-servicetitan metrics sales --range qtd --tenant TUC
+servicetitan metrics sales --range qtd --tenant NORTH
 servicetitan list jobs --range next7 --booked --fields jobNumber,date,customer,revenue
 servicetitan list memberships --renews-within 30
 servicetitan api jpm appointments list --starts-on-or-after 2026-09-16T00:00:00Z --all
@@ -238,6 +266,7 @@ snapshot an error instead of a warning.
 
 | Command | What it does |
 |---|---|
+| `setup` | Interactive first-run setup at a terminal: company, the four ServiceTitan values (secrets hidden), connection test, first pull. |
 | `profile list/show/add/remove/use/set/import/export` | Companies, their dashboard settings and their write policy (`set --allow-writes`, `--no-writes`). `export` prints a shareable config with no ids or secrets. |
 | `tenant list/add/update/set-secret/remove` | ServiceTitan accounts inside a profile, with secret storage. |
 | `auth check` | Authenticate every tenant; preview business-unit classification; list what the credential can write. |
@@ -254,7 +283,7 @@ snapshot an error instead of a warning.
 | `duplicates` | People who may hold two ServiceTitan user records. |
 | `palette` | Accessibility check for chart colours. |
 | `schema` | Machine-readable description of all of the above. |
-| `init` | State-aware setup checklist. |
+| `init` | Checklist for this machine: what is set up, what is next, and the command to run now. |
 
 Global options work before or after the command: `--profile`, `--tenant`,
 `--data`, `--format json|text|csv`, `--compact`, `--as-of`, `--config`/`--env-file`
@@ -347,6 +376,7 @@ definitions; the full reasoning is in the docstring of `src/servicetitan_cli/fet
 ## Where things live
 
 ```
+OS password store               client secrets and app keys, under the name servicetitan-cli
 <config dir>/profiles.json      companies, tenants, settings (no secrets)
 <config dir>/credentials.json   secrets, only when no OS keyring is available (mode 0600)
 <config dir>/tokens.json        15-minute access tokens (mode 0600)

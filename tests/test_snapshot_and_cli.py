@@ -267,7 +267,9 @@ def test_cli_profile_and_tenant_lifecycle(capsys, isolated_home, monkeypatch, de
     code, out, _ = run_cli(capsys, "status")
     assert code == 0 and out["profile"]["tenants"][0]["secretsStored"] == ["appKey", "clientSecret"] and out["snapshot"]["exists"] is False
     code, out, _ = run_cli(capsys, "init")
-    assert code == 0 and all(s["done"] for s in out["steps"] if s["step"] != "snapshot")
+    steps = {s["step"]: s["done"] for s in out["steps"]}
+    assert code == 0 and steps["install"] and steps["connect"] and not steps["first pull"]
+    assert out["next"] == "servicetitan auth check"            # added with --no-verify, so not tested yet
     from servicetitan_cli.paths import snapshot_path
     path = snapshot_path("acme")                      # the synthetic fixture stands in for a fetched snapshot
     os.makedirs(os.path.dirname(path), exist_ok=True)

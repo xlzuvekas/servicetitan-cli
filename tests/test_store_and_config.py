@@ -50,29 +50,29 @@ def test_file_secret_backend_is_private(isolated_home):
 def test_context_resolves_store_profile_and_env_overrides(isolated_home, monkeypatch):
     store = ProfileStore()
     store.add("acme", company_name="Acme")
-    store.add_tenant("acme", "SD", "San Diego", "111", "cid-sd")
-    store.add_tenant("acme", "TUC", "Tucson", "222", "cid-tuc")
+    store.add_tenant("acme", "NORTH", "North Branch", "111", "cid-north")
+    store.add_tenant("acme", "EAST", "East Branch", "222", "cid-east")
     store.save()
     secrets = SecretStore("file")
-    secrets.set(secret_key("acme", "SD", "clientSecret"), "sd-secret")
-    secrets.set(secret_key("acme", "SD", "appKey"), "shared-app-key")
-    secrets.set(secret_key("acme", "TUC", "clientSecret"), "tuc-secret")
-    store.mark_secret("acme", "SD", "clientSecret")
-    store.mark_secret("acme", "SD", "appKey")
-    store.mark_secret("acme", "TUC", "clientSecret")
+    secrets.set(secret_key("acme", "NORTH", "clientSecret"), "north-secret")
+    secrets.set(secret_key("acme", "NORTH", "appKey"), "shared-app-key")
+    secrets.set(secret_key("acme", "EAST", "clientSecret"), "east-secret")
+    store.mark_secret("acme", "NORTH", "clientSecret")
+    store.mark_secret("acme", "NORTH", "appKey")
+    store.mark_secret("acme", "EAST", "clientSecret")
     store.save()
 
     ctx = Context()
     assert ctx.profile_name == "acme" and ctx.source == "store"
     creds = ctx.validate_credentials()
-    assert creds["SD"].client_secret == "sd-secret"
-    assert creds["TUC"].app_key == "shared-app-key"  # borrowed from the sibling tenant
-    assert creds["TUC"].client_secret == "tuc-secret"
+    assert creds["NORTH"].client_secret == "north-secret"
+    assert creds["EAST"].app_key == "shared-app-key"  # borrowed from the sibling tenant
+    assert creds["EAST"].client_secret == "east-secret"
     assert ctx.data_path.endswith(os.path.join("snapshots", "acme.json"))
 
-    monkeypatch.setenv("SERVICETITAN_CLIENT_SECRET_TUC", "from-env")
+    monkeypatch.setenv("SERVICETITAN_CLIENT_SECRET_EAST", "from-env")
     ctx2 = Context()
-    assert ctx2.credentials_for(ctx2.select_tenants("tuc")[0]).client_secret == "from-env"
+    assert ctx2.credentials_for(ctx2.select_tenants("east")[0]).client_secret == "from-env"
     with pytest.raises(UsageError):
         ctx2.select_tenants("NOPE")
 

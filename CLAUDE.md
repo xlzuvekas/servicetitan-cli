@@ -1,5 +1,16 @@
 # Working on servicetitan-cli
 
+## Helping someone install or use it?
+
+You are probably not here to change the code. Follow SETUP.md with them: one
+step at a time, commands for their operating system only, and check each
+step's output before the next. Never ask for or accept the client secret or the
+app key in the conversation; the person types them into `servicetitan setup` in
+their own terminal. README.md covers daily use and `servicetitan schema`
+describes every command. The rest of this file is for changing the code.
+
+## The code
+
 ServiceTitan CLI for AI agents: reads by default, writes behind explicit gates.
 Python 3.9+, `requests` + `keyring` only. Source in `src/servicetitan_cli/`, tests in `tests/`, run `pytest`.
 
@@ -19,6 +30,17 @@ Python 3.9+, `requests` + `keyring` only. Source in `src/servicetitan_cli/`, tes
 - **Writes are previewable, logged and never auto-retried.** `--dry-run` shows
   the exact request; every attempt lands in `audit.jsonl`; a 5xx or a dropped
   connection on a write is reported, not repeated.
+- **No client information, ever.** Examples, help text, hints, tests and docs
+  use the fictional Acme Home Services with tenant codes MAIN, NORTH and EAST.
+  Never commit a client's name, locations, people, ids or data, and keep them
+  out of commit messages too. Share the code as a zip of the tree (GitHub's
+  Download ZIP of `main`, or `git archive`), never a zipped clone: a clone
+  carries `.git` and every old commit.
+- **Setup is guided and secrets stay out of chats.** `servicetitan setup`
+  (`onboarding.py`) is the interactive path for people; it refuses without a
+  terminal and prints the scripted `profile add` + `tenant add` equivalent.
+  Nothing it asks is saved until the connection test passes or the person
+  chooses to keep the values. Keep SETUP.md in step with it.
 - **Credentials never go to a foreign host.** `resolve_url` refuses URLs off
   the environment's API host. Keep it that way.
 - **The index stays local.** `indexing.py` computes embeddings on the machine
@@ -51,6 +73,7 @@ Python 3.9+, `requests` + `keyring` only. Source in `src/servicetitan_cli/`, tes
 | `writes.py` | Write policy: allowlist patterns, request-body assembly and validation, terminal confirmation, audit log. |
 | `catalogue.py` | Builds a catalogue from OpenAPI documents (naming rules, hashes, versions, deprecation), refreshes from the live portal into the config dir, diffs two catalogues. |
 | `indexing.py` | Local LlamaIndex: documents from snapshot records, saved results (`--save`), the catalogue, definitions and docs; build/update, status, results store; hybrid query (vectors + BM25 `lexical.json`, RRF fusion, rare identifiers pinned, optional local cross-encoder). Lazy imports; `hash` embeddings for tests. |
+| `onboarding.py` | `servicetitan setup` (the interactive wizard: prompts on stderr, secrets via getpass, test before save) and `servicetitan init` (offline checklist with the next command). |
 | `brief.py` | `servicetitan brief`: a selection from the metrics areas for one-call orientation; no new math. |
 | `render.py` + `data/dashboard_template.html` | The single-file dashboard. |
 | `schema.py` | `servicetitan schema`; derived from the parser, so new commands appear automatically. |

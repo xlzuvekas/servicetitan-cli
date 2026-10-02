@@ -104,8 +104,8 @@ says so on stderr.
 ## 4. Second tenant, second company
 
 - Another ServiceTitan account for the same company (a second physical location
-  with its own tenant): `servicetitan tenant add acme --code TUC --label Tucson
-  --tenant-id ... --client-id ...`. The app key is reused. Each tenant needs its
+  with its own tenant): `servicetitan setup --profile acme` (or `servicetitan tenant add acme --code NORTH
+  --label "North Branch" --tenant-id ... --client-id ...`). The app key is reused. Each tenant needs its
   own client id and secret, generated from inside that tenant.
 - Another company entirely: `servicetitan profile add othercompany ...` and
   repeat steps 1 to 3 in *their* developer portal and ServiceTitan account.
