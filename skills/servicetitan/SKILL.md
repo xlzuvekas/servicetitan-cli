@@ -69,6 +69,10 @@ to `servicetitan index query "<words>" [--kind invoices,result,api]`: it returns
 matching records, saved results, API operations and definitions with a `next`
 command for each; run that command before quoting a figure.
 
+If the st-operator MCP tools are connected, they are the same commands:
+`status`, `brief`, `metrics`, `list_records`, `search`, `api_discover`,
+`api_read` and `api_write`, which previews unless `dry_run` is false.
+
 ## Writes
 
 Write operations (POST, PUT, PATCH, DELETE) are marked gated in the tree. They
@@ -118,9 +122,11 @@ failed checks from the error's `details` rather than retrying blindly.
 
 ## Setup and errors
 
-- No profile yet: `servicetitan init` prints the state-aware setup steps;
-  credentials come from the ServiceTitan developer portal and Settings >
-  Integrations > API Application Access (see docs/setup-servicetitan-api-access.md).
+- No profile yet: `servicetitan init` shows what is missing and the next
+  command. The person connects a company by running `servicetitan setup` in
+  their own terminal; it asks for the four values and hides the secrets. Never
+  ask them to paste the client secret or app key into the conversation. SETUP.md
+  in the project folder walks through everything, including installing Python.
 - Exit 3 = configuration, 4 = credentials rejected, 5 = API/network, 6 =
   validation failed, 7 = snapshot missing/stale. The error JSON's `hint` says
   what to do.

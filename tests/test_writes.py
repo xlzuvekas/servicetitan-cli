@@ -84,12 +84,12 @@ class Tty(io.StringIO):
 def test_confirmation_requires_the_tenant_code():
     preview = {"method": "POST", "url": "https://api.servicetitan.io/x", "params": {"a": 1}, "body": {"text": "hi"}}
     err = io.StringIO()
-    assert writes.confirm(preview, "SD", stdin=Tty("sd\n"), stderr=err) is True
-    assert "tenant SD" in err.getvalue() and '"text": "hi"' in err.getvalue()
-    assert writes.confirm(preview, "SD", stdin=Tty("\n"), stderr=io.StringIO()) is False
-    assert writes.confirm(preview, "SD", stdin=Tty("yes\n"), stderr=io.StringIO()) is False
-    assert writes.confirm(preview, "SD", stdin=io.StringIO("no\n"), stderr=io.StringIO()) is True   # no terminal: no prompt
-    assert writes.confirm(preview, "SD", assume_yes=True, stdin=Tty("no\n"), stderr=io.StringIO()) is True
+    assert writes.confirm(preview, "MAIN", stdin=Tty("main\n"), stderr=err) is True
+    assert "tenant MAIN" in err.getvalue() and '"text": "hi"' in err.getvalue()
+    assert writes.confirm(preview, "MAIN", stdin=Tty("\n"), stderr=io.StringIO()) is False
+    assert writes.confirm(preview, "MAIN", stdin=Tty("yes\n"), stderr=io.StringIO()) is False
+    assert writes.confirm(preview, "MAIN", stdin=io.StringIO("no\n"), stderr=io.StringIO()) is True   # no terminal: no prompt
+    assert writes.confirm(preview, "MAIN", assume_yes=True, stdin=Tty("no\n"), stderr=io.StringIO()) is True
 
 
 def test_audit_log_is_private_and_readable(isolated_home):

@@ -71,14 +71,14 @@ def new_profile(company_name=None, subtitle="Operations Dashboard", timezone=Non
 def validate_profile_name(name):
     if not name or not PROFILE_NAME_RE.match(name):
         raise ConfigError("Invalid profile name %r" % (name,),
-                          hint="Use 1-40 lowercase letters, digits, '-' or '_', e.g. `acme` or `viking-air`.")
+                          hint="Use 1-40 lowercase letters, digits, '-' or '_', e.g. `acme` or `acme-hvac`.")
     return name
 
 
 def validate_tenant_code(code):
     if not code or not TENANT_CODE_RE.match(code):
         raise ConfigError("Invalid tenant code %r" % (code,),
-                          hint="Use 1-16 letters, digits, '-' or '_' with no spaces, e.g. `MAIN`, `SD` or `TUCSON`. "
+                          hint="Use 1-16 letters, digits, '-' or '_' with no spaces, e.g. `MAIN`, `NORTH` or `EAST`. "
                                "The code prefixes every record id in snapshots, so keep it short.")
     return code.upper()
 

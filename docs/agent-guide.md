@@ -53,7 +53,7 @@ and "close rate" counts opportunities (one per job), not estimates.
 `servicetitan profile list` shows every company configured here. Pass
 `--profile NAME` on every command (or set `SERVICETITAN_PROFILE`). Within a
 profile, `--tenant CODE` narrows to one ServiceTitan account; the default is the
-combined view. Record ids are prefixed with the tenant code (`SD:5510`).
+combined view. Record ids are prefixed with the tenant code (`MAIN:5510`).
 
 ## Live API access
 
@@ -121,6 +121,15 @@ servicetitan api audit --limit 5                                         # what 
 - Do not ask for the policy to be widened beyond the operation at hand, and
   never suggest `*`.
 
+## Through MCP
+
+When the st-operator MCP server is connected (`servicetitan mcp`), its tools
+are these commands under other names: `status` (init and status), `brief`,
+`metrics`, `list_records`, `search` (index query), `saved_results`, `refresh`
+(fetch), `api_discover`, `api_read` and `api_write`. The rules on this page
+apply unchanged. `api_write` previews unless you pass `dry_run: false`; pass
+that only when the person asked for the change.
+
 ## Remembering and searching
 
 `--save` on any command keeps its result under the config directory with the
@@ -161,6 +170,13 @@ The `hint` field of an error says what to do next.
 
 ## Do not
 
+- Do not ask a person for the client secret or the app key, and do not accept
+  them if offered. Ask them to run `servicetitan setup` in their own terminal;
+  it asks for both through hidden prompts. If a secret was pasted into a
+  conversation anyway, tell them to generate a new one in ServiceTitan.
+- Do not run `servicetitan setup` yourself: it needs a person at a terminal and
+  exits with code 2 without one. `servicetitan init` shows what is missing and
+  the next command.
 - Do not paste secrets into command arguments; use `--client-secret-stdin`
   or `--client-secret-env VAR`.
 - Do not send snapshot files or rendered dashboards outside the company: they

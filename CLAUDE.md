@@ -1,5 +1,16 @@
 # Working on servicetitan-cli
 
+## Helping someone install or use it?
+
+You are probably not here to change the code. Follow SETUP.md with them: one
+step at a time, commands for their operating system only, and check each
+step's output before the next. Never ask for or accept the client secret or the
+app key in the conversation; the person types them into `servicetitan setup` in
+their own terminal. README.md covers daily use and `servicetitan schema`
+describes every command. The rest of this file is for changing the code.
+
+## The code
+
 ServiceTitan CLI for AI agents: reads by default, writes behind explicit gates.
 Python 3.9+, `requests` + `keyring` only. Source in `src/servicetitan_cli/`, tests in `tests/`, run `pytest`.
 
@@ -19,6 +30,17 @@ Python 3.9+, `requests` + `keyring` only. Source in `src/servicetitan_cli/`, tes
 - **Writes are previewable, logged and never auto-retried.** `--dry-run` shows
   the exact request; every attempt lands in `audit.jsonl`; a 5xx or a dropped
   connection on a write is reported, not repeated.
+- **No client information, ever.** Examples, help text, hints, tests and docs
+  use the fictional Acme Home Services with tenant codes MAIN, NORTH and EAST.
+  Never commit a client's name, locations, people, ids or data, and keep them
+  out of commit messages too. Share the code as a zip of the tree (GitHub's
+  Download ZIP of `main`, or `git archive`), never a zipped clone: a clone
+  carries `.git` and every old commit.
+- **Setup is guided and secrets stay out of chats.** `servicetitan setup`
+  (`onboarding.py`) is the interactive path for people; it refuses without a
+  terminal and prints the scripted `profile add` + `tenant add` equivalent.
+  Nothing it asks is saved until the connection test passes or the person
+  chooses to keep the values. Keep SETUP.md in step with it.
 - **Credentials never go to a foreign host.** `resolve_url` refuses URLs off
   the environment's API host. Keep it that way.
 - **The index stays local.** `indexing.py` computes embeddings on the machine
@@ -27,7 +49,16 @@ Python 3.9+, `requests` + `keyring` only. Source in `src/servicetitan_cli/`, tes
   Index and results directories are owner-only. LlamaIndex stays an optional
   extra; core commands must work without it.
 - **stdout is one JSON document.** Progress, warnings and errors go to stderr.
-  Use `output.progress`, never `print`.
+  Use `output.progress`, never `print`. The one exception is `servicetitan
+  mcp`, whose stdout carries only MCP protocol messages; tool runs redirect any
+  stray print to stderr.
+- **The MCP server is the CLI.** `mcp_server.py` (server name st-operator, an
+  independent third-party integration) runs every tool through
+  `cli.run_captured`, the same path as the command line, so answers and errors
+  match. Keep the tool list short: hosts load every tool description into the
+  model's context. Parser-backed tools read their schemas from argparse. Writes
+  go only through `api_write`, which previews by default; `--read-only` leaves
+  it out. `tests/test_mcp.py` includes a real stdio session.
 - **Errors are `CliError` subclasses** with a code, exit status and a hint that
   says what to do. See `errors.py` and keep the exit-code table in sync with
   `README.md` and `schema.py`.
@@ -51,6 +82,8 @@ Python 3.9+, `requests` + `keyring` only. Source in `src/servicetitan_cli/`, tes
 | `writes.py` | Write policy: allowlist patterns, request-body assembly and validation, terminal confirmation, audit log. |
 | `catalogue.py` | Builds a catalogue from OpenAPI documents (naming rules, hashes, versions, deprecation), refreshes from the live portal into the config dir, diffs two catalogues. |
 | `indexing.py` | Local LlamaIndex: documents from snapshot records, saved results (`--save`), the catalogue, definitions and docs; build/update, status, results store; hybrid query (vectors + BM25 `lexical.json`, RRF fusion, rare identifiers pinned, optional local cross-encoder). Lazy imports; `hash` embeddings for tests. |
+| `mcp_server.py` | `servicetitan mcp`: MCP over stdio (JSON-RPC lines), ten tools mapped onto CLI commands, progress notifications, oversize answers saved locally, `--client-config` for Claude Desktop and Claude Code. |
+| `onboarding.py` | `servicetitan setup` (the interactive wizard: prompts on stderr, secrets via getpass, test before save) and `servicetitan init` (offline checklist with the next command). |
 | `brief.py` | `servicetitan brief`: a selection from the metrics areas for one-call orientation; no new math. |
 | `render.py` + `data/dashboard_template.html` | The single-file dashboard. |
 | `schema.py` | `servicetitan schema`; derived from the parser, so new commands appear automatically. |
