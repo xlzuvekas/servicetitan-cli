@@ -21,7 +21,7 @@ from . import __version__
 from .config import Context
 from .dates import RANGE_KINDS, parse_iso
 from .errors import CliError, ConfigError, DataError, UsageError, ValidationError
-from .output import emit, emit_error, progress, redact
+from .output import emit, emit_error, progress, redact, use_utf8
 from .paths import snapshot_path
 
 EXAMPLES = """
@@ -1214,6 +1214,7 @@ def run_captured(argv):
 
 
 def main(argv=None):
+    use_utf8()
     parser = build_parser()
     args = parser.parse_args(argv)
     fmt = _opt(args, "format") or os.environ.get("SERVICETITAN_FORMAT") or "json"

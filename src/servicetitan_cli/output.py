@@ -168,6 +168,30 @@ def to_csv(data):
     return buf.getvalue()
 
 
+def use_utf8(*streams):
+    """Force UTF-8 on the process's text streams.
+
+    Output is written with ensure_ascii=False, so any non-ASCII character in a
+    record reaches the stream as itself. On Windows a redirected stdout defaults
+    to the ANSI codepage (cp1252 on a US install), which cannot encode most of
+    them, and the whole command dies with UnicodeEncodeError partway through a
+    result that was otherwise fine -- a customer name with an emoji in it is
+    enough. Seen on `api accounting invoices list --all` piped to a file.
+
+    errors="replace" on stderr so a progress line can never be the thing that
+    kills a run; stdout stays strict, because silently corrupting one character
+    of a JSON document an agent is about to parse is worse than failing.
+    """
+    for stream, errors in zip(streams or (sys.stdout, sys.stderr), ("strict", "replace")):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is None:        # not a TextIOWrapper (pytest capture, a StringIO)
+            continue
+        try:
+            reconfigure(encoding="utf-8", errors=errors)
+        except (ValueError, OSError):  # already detached, or not reconfigurable
+            pass
+
+
 def emit(data, fmt="json", pretty=True, stream=None):
     stream = stream or sys.stdout
     if fmt == "text":

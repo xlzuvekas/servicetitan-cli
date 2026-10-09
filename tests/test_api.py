@@ -222,3 +222,23 @@ def test_problem_details_are_surfaced():
         c.get("jpm/v2/jobs")
     assert ei.value.details["problem"]["errors"]["pageSize"] and "validation" in ei.value.message
     assert ServiceTitanClient.problem_details("not json") is None
+
+
+def test_emit_survives_a_non_cp1252_character_on_a_byte_stream():
+    """A record carrying an emoji must not kill the command on Windows.
+
+    Output uses ensure_ascii=False, so the character reaches the stream as
+    itself. A redirected stdout on Windows defaults to the ANSI codepage, which
+    cannot encode it, and the run dies partway through an otherwise good result.
+    use_utf8 reconfigures the stream; this reproduces the shape of that stream.
+    """
+    import io as _io
+    from servicetitan_cli import output
+
+    raw = _io.BytesIO()
+    stream = _io.TextIOWrapper(raw, encoding="cp1252", newline="")
+
+    output.use_utf8(stream)
+    output.emit({"customer": "Service \ufe0f call"}, stream=stream)
+
+    assert "\ufe0f" in raw.getvalue().decode("utf-8")
