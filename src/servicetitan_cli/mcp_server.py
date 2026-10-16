@@ -33,9 +33,9 @@ DEFAULT_REFRESH_MAX_AGE = 6.0
 
 INSTRUCTIONS = (
     "Third-party tools for one company's ServiceTitan data; not affiliated with ServiceTitan. Start with status. "
-    "brief, metrics and list_records answer from a local snapshot: if status says it is missing or stale, call "
-    "refresh first (a full pull takes minutes). Before quoting a number to a person, call metrics with explain "
-    "true once and keep the definition with the number. For anything the snapshot does not hold, find the "
+    "brief, metrics and list_records answer from a local snapshot: if status says it is missing, stale or "
+    "incomplete, call refresh first (a full pull takes minutes). Before quoting a number to a person, call "
+    "metrics with explain true once and keep the definition with the number. For anything the snapshot does not hold, find the "
     "operation with api_discover, then call api_read. Changes in ServiceTitan go through api_write: preview with "
     "dry_run true (the default) and run it with dry_run false only when the person asked for that change. Never ask "
     "for the client secret or app key; if nothing is set up, ask the person to run `servicetitan setup` in their "

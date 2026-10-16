@@ -264,9 +264,13 @@ extra installed, `--save` still keeps results on disk and `index results` still
 lists them; only the semantic search is missing.
 
 Snapshots live in the CLI's config directory (`servicetitan status` shows the
-path). Every query answer carries `snapshot.generatedAt`, `ageHours` and
-`stale`, so an agent can decide to fetch first; `--require-fresh` makes a stale
-snapshot an error instead of a warning.
+path). Every query answer carries `snapshot.generatedAt`, `ageHours`, `stale`
+and `complete`, so an agent can decide to fetch first; `--require-fresh` makes a
+stale snapshot an error instead of a warning. `fetch` reads every page of every
+collection. If one stops early anyway (`--max-pages`, or a ServiceTitan answer
+that would page forever), `complete` is false, `snapshot.truncated` names the
+collection, answers carry a warning, and `check` fails, because every total
+built from that collection would be too low.
 
 ### Commands
 
@@ -278,7 +282,7 @@ snapshot an error instead of a warning.
 | `auth check` | Authenticate every tenant; preview business-unit classification; list what the credential can write. |
 | `status` | Profile summary plus snapshot freshness and record counts. Cheap; run first. |
 | `brief` | One-call operations briefing: today, next 7 days, month to date, receivables, memberships, pipeline, flags. |
-| `fetch` | Pull a snapshot (read-only). `--max-age`, `--tenant` for one tenant, `--max-pages`, `--page-size`. |
+| `fetch` | Pull a snapshot (read-only), every page of every collection. `--max-age` (an incomplete snapshot is always re-pulled), `--tenant` for one tenant, `--max-pages` (marks the snapshot incomplete if it cuts a collection short), `--page-size`. |
 | `check` | Snapshot integrity checks; exit 6 on failure. Wire it into unattended refreshes. |
 | `metrics <area>` | `revenue`, `service`, `sales`, `install`, `accounting`, `marketing`, `office`, `memberships`, `all`. |
 | `list <kind>` | `jobs`, `opportunities`, `invoices`, `purchase-orders`, `calls`, `memberships`, `technicians`, `campaigns`, `business-units`, `people`, with filters, `--sort`, `--fields`, `--limit`, `--count`. |

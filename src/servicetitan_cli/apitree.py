@@ -282,7 +282,7 @@ def execute(op, ns, ctx, client_factory, tenant_code=None):
     """Run one operation for one tenant. Returns the result envelope."""
     if op["method"] != "GET":
         return execute_write(op, ns, ctx, client_factory, tenant_code)
-    from .api import ServiceTitanClient
+    from .api import STOP_REASONS, ServiceTitanClient
     tenants = ctx.select_tenants(tenant_code)
     if len(tenants) != 1:
         raise UsageError("Profile %r has %d tenants; pass --tenant CODE" % (ctx.profile_name, len(tenants)),
@@ -317,6 +317,8 @@ def execute(op, ns, ctx, client_factory, tenant_code=None):
                 items.extend(batch)
             env.update({"pages": pages, "count": len(items), "truncated": client.last_truncated,
                         "data": _trim(items, getattr(ns, "fields", None))})
+            if client.last_truncated:
+                env["truncatedBecause"] = STOP_REASONS[client.last_stop]
             return env
     body = client.get(path, params)
     if getattr(ns, "raw", False):

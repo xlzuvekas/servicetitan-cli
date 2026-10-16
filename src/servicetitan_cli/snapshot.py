@@ -46,17 +46,35 @@ class Snapshot(object):
 
     def describe(self, as_of=None, max_age_hours=DEFAULT_MAX_AGE_HOURS):
         age = self.age_hours(as_of)
-        return {
+        cut = truncated_collections(self.data)
+        out = {
             "path": self.path,
             "generatedAt": self.data.get("generatedAt"),
             "ageHours": age,
             "stale": (age is None or age > max_age_hours) and not self.is_demo,
+            # false: a collection stopped early and totals built from it are too low; null: not recorded
+            "complete": None if cut is None else not cut,
             "isDemo": self.is_demo,
             "profile": self.data.get("profile"),
             "tenants": self.tenant_codes(),
             "counts": self.counts(),
             "cliVersion": (self.data.get("cli") or {}).get("version"),
         }
+        if cut:
+            out["truncated"] = cut
+        return out
+
+
+def truncated_collections(data):
+    """Collections a pull stopped reading early, one line each, or None when the snapshot does not say:
+    synthetic data, or a tenant pulled by a version that did not record it."""
+    pulls = data.get("pulls")
+    if not pulls or any("truncated" not in (stats or {}) for stats in pulls.values()):
+        return None
+    from .api import STOP_REASONS
+    return ["%s %s: %s records, then %s" % (code, t.get("collection"), "{:,}".format(t.get("records") or 0),
+                                            STOP_REASONS.get(t.get("reason"), "stopped early"))
+            for code, stats in sorted(pulls.items()) for t in stats["truncated"]]
 
 
 def load_snapshot(path):
@@ -111,6 +129,15 @@ def check_snapshot(data, expected_codes, synthetic=False, max_age_hours=DEFAULT_
     unresolved = sorted({o["owner"] for o in (data.get("opportunities") or []) if o.get("owner") and o["owner"] not in people})
     add("owners-resolved", not unresolved, "all opportunity owners resolve to a name" if not unresolved
         else "%d unresolved owner id(s): %s" % (len(unresolved), unresolved[:3]))
+
+    cut = truncated_collections(data)
+    if cut is None:
+        add("complete", True, "synthetic data" if synthetic or data.get("isDemo")
+            else "not recorded by the version that wrote this snapshot; the next fetch records it")
+    else:
+        add("complete", not cut, "every collection was read to the end" if not cut else
+            "%d collection(s) stopped early, so totals built from them are too low: %s"
+            % (len(cut), "; ".join(cut[:3]) + ("; ..." if len(cut) > 3 else "")))
 
     stamp = data.get("generatedAt")
     gen = parse_iso(stamp)

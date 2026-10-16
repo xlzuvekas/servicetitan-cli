@@ -18,7 +18,8 @@ servicetitan brief             # the operating picture in one call: today, next 
 servicetitan profile list      # if several companies are configured; then pass --profile NAME everywhere
 ```
 
-If `snapshot.stale` is true (older than 6 hours) or there is no snapshot:
+If `snapshot.stale` is true (older than 6 hours), `snapshot.complete` is false
+(a collection stopped early, so totals are too low) or there is no snapshot:
 
 ```bash
 servicetitan fetch --max-age 6

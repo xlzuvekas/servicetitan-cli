@@ -38,6 +38,9 @@ def build_brief(snap, as_of, tz, tenant=None, targets=None, rules=None, max_age_
     snapshot = snap.describe(as_of=as_of, max_age_hours=max_age_hours)
 
     flags = []
+    if snapshot["complete"] is False:
+        flags.append("snapshot is incomplete, so totals are too low: %s; run `servicetitan fetch` again, without "
+                     "--max-pages" % "; ".join(snapshot["truncated"]))
     if snapshot["stale"]:
         flags.append("snapshot is %sh old; run `servicetitan fetch`" % (snapshot["ageHours"] if snapshot["ageHours"] is not None else "?"))
     if (acc.get("arPast30Pct") or 0) >= FLAG_AR_PAST_30_PCT:

@@ -25,8 +25,11 @@ servicetitan list <kind> [filters] --fields a,b,c --limit 20
 
 `status` costs nothing. `fetch` calls ServiceTitan (minutes on a large tenant)
 and is safe to repeat. Everything else answers from the local snapshot; each
-answer carries `snapshot.generatedAt`, `snapshot.ageHours` and `snapshot.stale`.
-Add `--require-fresh` when a stale answer would be worse than no answer.
+answer carries `snapshot.generatedAt`, `snapshot.ageHours`, `snapshot.stale` and
+`snapshot.complete`. Add `--require-fresh` when a stale answer would be worse
+than no answer. `complete: false` means a collection stopped early
+(`snapshot.truncated` names it), so totals built from it are too low: run
+`fetch` again before quoting them.
 
 ## Choosing a command
 
@@ -76,9 +79,9 @@ servicetitan api endpoints --search "words"   # when the module is unknown
 - `api ...` needs exactly one tenant; pass `--tenant` when the profile has several.
 - `api get <path>` still exists for a raw path (`jpm/v2/jobs` shorthand or the
   documented form). The tenant id is filled in. Nothing is ever sent to another host.
-- Paged lists: `--all --max-pages N` follows `hasMore`. `pageSize` defaults to 50 on the API (200 here);
-  the client caps it at 500. `ids=` filters take at most 50 ids. `active` filters take `True`, `Any`
-  or `False` (default: active records only).
+- Paged lists: `--all --max-pages N` follows `hasMore`; `truncated: true` comes with `truncatedBecause`.
+  `pageSize` defaults to 50 on the API (200 here); the client caps it at 500. `ids=` filters take at
+  most 50 ids. `active` filters take `True`, `Any` or `False` (default: active records only).
 - Bulk feeds: `api get jpm/v2/export/jobs --export --from 2026-01-01`; keep the
   returned `continueFrom` to resume later.
 - Rate limit is 600 calls per 10 seconds per tenant; the client backs off on 429.

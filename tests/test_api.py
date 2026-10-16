@@ -151,9 +151,40 @@ def test_paging_follows_has_more_and_caps():
     assert [p["page"] for p in params] == [1, 2, 3] and params[0]["pageSize"] == 200
     pages2 = [FakeResponse(200, {"data": [1], "hasMore": True}), FakeResponse(200, {"data": [2], "hasMore": True})]
     c2, _ = client({"jobs": pages2})
-    assert c2.get_all("jpm/v2/jobs", max_pages=1) == [1] and c2.last_truncated
+    assert c2.get_all("jpm/v2/jobs", max_pages=1) == [1] and c2.last_truncated and c2.last_stop == "max-pages"
     c3, _ = client({}, page_size=99999)
     assert c3.page_size == MAX_PAGE_SIZE
+
+
+def test_paging_reads_to_the_end_and_stops_on_answers_that_never_end():
+    # No page limit unless one is asked for: 150 pages of 200 is past the old 20,000-record cut-off.
+    many = [FakeResponse(200, {"data": [{"id": n * 200 + i} for i in range(200)], "hasMore": n < 149})
+            for n in range(150)]
+    seen = []
+    c, sess = client({"customers": many}, progress=seen.append)
+    rows = c.get_all("crm/v2/customers", label="customers")
+    assert len(rows) == 30000 and not c.last_truncated and c.last_stop is None and c.last_pages == 150
+    assert seen[0] == "   [NORTH] customers: 5,000 records so far" and len(seen) == 6
+
+    # Records that shift between pages while a long pull runs count once; the later copy wins.
+    shifted = [FakeResponse(200, {"data": [{"id": 1}, {"id": 2, "v": "old"}], "hasMore": True}),
+               FakeResponse(200, {"data": [{"id": 2, "v": "new"}, {"id": 3}], "hasMore": False})]
+    c, _ = client({"jobs": shifted})
+    assert c.get_all("jpm/v2/jobs") == [{"id": 1}, {"id": 2, "v": "new"}, {"id": 3}] and not c.last_truncated
+
+    # A server that ignores `page` would repeat page 1 forever: stop at the first repeat, and say why.
+    c, sess = client({"jobs": FakeResponse(200, {"data": [{"id": 1}, {"id": 2}], "hasMore": True})})
+    assert c.get_all("jpm/v2/jobs") == [{"id": 1}, {"id": 2}] and c.last_stop == "repeated-page"
+    assert len([x for x in sess.calls if x[0] == "GET"]) == 2 and c.last_pages == 1
+    # ...even while new records trickle in at the top: a page that is mostly repeats stops, keeping the new one.
+    trickle = [FakeResponse(200, {"data": [{"id": i} for i in range(n, n + 10)], "hasMore": True}) for n in (1, 2, 3)]
+    c, _ = client({"calls": trickle})
+    assert [r["id"] for r in c.get_all("telecom/v3/calls")] == list(range(1, 12)) and c.last_stop == "repeated-page"
+
+    # hasMore on an empty page has nothing left to follow.
+    c, _ = client({"jobs": [FakeResponse(200, {"data": [{"id": 1}], "hasMore": True}),
+                            FakeResponse(200, {"data": [], "hasMore": True})]})
+    assert c.get_all("jpm/v2/jobs") == [{"id": 1}] and c.last_truncated and c.last_stop == "empty-page"
 
 
 def test_401_refreshes_token_once_then_fails():

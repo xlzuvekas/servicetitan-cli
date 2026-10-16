@@ -62,7 +62,7 @@ SNAPSHOT_RECORDS = {
     "businessUnits": "Fields: id, loc, name, dept (None = excluded), active.",
     "campaigns": "Fields: id, loc, name, category, active.",
     "people": "Map of namespaced user id -> name for technicians and office employees.",
-    "meta": "generatedAt (UTC), isDemo, profile, environment, timezone, tenants[], window{operationalStart, arStart}, pulls{code: stats}, poTotals{code: all-status PO count}, rawCallCount, estimateCount, cli{version}.",
+    "meta": "generatedAt (UTC), isDemo, profile, environment, timezone, tenants[], window{operationalStart, arStart}, pulls{code: stats, incl. truncated[] = collections that stopped early}, poTotals{code: all-status PO count}, rawCallCount, estimateCount, cli{version}.",
 }
 
 
@@ -93,7 +93,7 @@ def build_schema(parser):
             "exitCodes": {str(k): v for k, v in EXIT_CODES.items()},
             "profiles": "A profile is one company with one or more ServiceTitan tenants. Select with --profile NAME or SERVICETITAN_PROFILE; the store's default profile is used otherwise. Legacy config.json + .env in the working directory and plain SERVICETITAN_* environment variables also work.",
             "tenants": "--tenant CODE narrows to one tenant; default is all tenants of the profile (the dashboard's 'Combined').",
-            "snapshots": "fetch writes <config dir>/snapshots/<profile>.json; metrics, list, check, render, duplicates and status read it. Use --data PATH to point elsewhere. Every query response carries snapshot.generatedAt, ageHours and stale so you can decide whether to fetch first (or run `fetch --max-age 6`).",
+            "snapshots": "fetch writes <config dir>/snapshots/<profile>.json; metrics, list, check, render, duplicates and status read it. Use --data PATH to point elsewhere. Every query response carries snapshot.generatedAt, ageHours, stale and complete so you can decide whether to fetch first (or run `fetch --max-age 6`). complete false means a collection stopped early (snapshot.truncated names it) and totals built from it are too low; null means the snapshot does not record it.",
             "source": "every response says where its data came from: 'snapshot' (metrics, list, brief), 'live' (api ..., auth check), 'catalogue' (api discovery), 'audit' (api audit), 'index' (index query/status) or 'results' (saved results).",
             "save": "--save on any command keeps its result under <config dir>/results/<profile>/ (owner-only JSON with the command line and a --save-label) and adds it to the local index when one exists, so what an agent found live can be searched later.",
             "mcp": "servicetitan mcp serves the same commands to MCP clients over stdio as a local server named st-operator (an independent third-party integration, not affiliated with ServiceTitan): status, brief, metrics, list_records, search, saved_results, refresh, api_discover, api_read and api_write (previews unless dry_run is false; --read-only leaves it out). servicetitan mcp --client-config prints the Claude Desktop and Claude Code configuration.",

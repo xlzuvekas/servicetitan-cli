@@ -1,16 +1,23 @@
 """pull_tenant against a fake client: the derived-number rules from the docstring."""
 from servicetitan_cli.fetch import build_snapshot, dept_for_business_unit, pull_tenant
+from servicetitan_cli.snapshot import Snapshot, check_snapshot, problems
 from servicetitan_cli.store import new_profile
 
 
 class FakeClient(object):
-    def __init__(self, data):
+    """Answers get_all from canned rows; paths ending in one of ``cut`` stop early as if at the page limit."""
+
+    def __init__(self, data, cut=()):
         self.data = data
+        self.cut = cut
         self.calls = []
         self.requests_made = 0
+        self.last_truncated, self.last_stop, self.last_pages = False, None, 0
 
     def get_all(self, path, params=None, max_pages=None, label=None):
         self.calls.append((path, dict(params or {})))
+        stopped = path.endswith(tuple(self.cut)) if self.cut else False
+        self.last_truncated, self.last_stop, self.last_pages = stopped, "max-pages" if stopped else None, 100 if stopped else 1
         for key, rows in self.data.items():
             if path.endswith(key):
                 if isinstance(rows, dict):
@@ -187,3 +194,40 @@ def test_build_snapshot_merges_tenants(isolated_home, monkeypatch):
     assert snap["isDemo"] is False and snap["profile"] == "env" and snap["tenants"][0]["code"] == "MAIN"
     assert len(snap["jobs"]) == 3 and snap["pulls"]["MAIN"]["completedJobs"] == 1 and snap["cli"]["version"]
     assert all(j["id"].startswith("MAIN:") for j in snap["jobs"])
+
+
+def test_a_collection_cut_short_marks_the_snapshot_incomplete(isolated_home, monkeypatch):
+    from servicetitan_cli.config import Context
+    for k, v in (("TENANT_ID", "1"), ("CLIENT_ID", "c"), ("CLIENT_SECRET", "s"), ("APP_KEY", "k")):
+        monkeypatch.setenv("SERVICETITAN_" + k, v)
+    whole = build_snapshot(Context(), quiet=True, client_factory=lambda creds, **kw: FakeClient(fake_data()))
+    assert whole["pulls"]["MAIN"]["truncated"] == [] and Snapshot(whole).describe()["complete"] is True
+    whole["jobs"] *= 10  # past the jobs floor, so only completeness is under test
+    assert not problems(check_snapshot(whole, ["MAIN"]))
+
+    cut = build_snapshot(Context(), quiet=True,
+                         client_factory=lambda creds, **kw: FakeClient(fake_data(), cut=("customers",)))
+    assert cut["pulls"]["MAIN"]["truncated"] == [{"collection": "customers", "path": "crm/v2/customers", "records": 1,
+                                                 "pages": 100, "reason": "max-pages"}]
+    assert "customers incomplete at 1 records" in cut["pulls"]["MAIN"]["warnings"][0]
+    desc = Snapshot(cut).describe()
+    assert desc["complete"] is False and desc["truncated"] == [
+        "MAIN customers: 1 records, then stopped at the page limit; more pages remain"]
+    cut["jobs"] *= 10
+    failed = {p["check"]: p["detail"] for p in problems(check_snapshot(cut, ["MAIN"]))}
+    assert list(failed) == ["complete"] and "MAIN customers" in failed["complete"]
+
+    # Snapshots written before completeness was recorded say so instead of claiming either way.
+    del cut["pulls"]["MAIN"]["truncated"]
+    assert Snapshot(cut).describe()["complete"] is None and not problems(check_snapshot(cut, ["MAIN"]))
+
+
+def test_a_job_seen_under_two_statuses_counts_once():
+    data = fake_data()
+    moved = {"id": 202, "businessUnitId": 1, "total": 275, "estimateIds": [], "customerId": 900}
+    data["jobs"]["Scheduled"].append(dict(moved, jobStatus="Scheduled"))
+    data["jobs"]["Dispatched"] = [dict(moved, jobStatus="Dispatched")]  # dispatched while the pull ran
+    cfg = config()
+    out = pull_tenant(FakeClient(data), cfg, cfg["tenants"][0], "2026-01-01T00:00:00Z", "2025-01-01T00:00:00Z")
+    rows = [j for j in out["jobs"] if j["id"] == "SPR:202"]
+    assert len(rows) == 1 and rows[0]["status"] == "Dispatched" and out["stats"]["bookedJobs"] == 2

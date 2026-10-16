@@ -205,7 +205,9 @@ def build_parser():
     x = _sub(sub, "fetch", "pull a fresh snapshot from ServiceTitan (read-only)")
     x.add_argument("--max-age", type=float, metavar="HOURS",
                    help="skip the pull when the existing snapshot is younger than this")
-    x.add_argument("--max-pages", type=int, default=100, help="page cap per collection (default %(default)s)")
+    x.add_argument("--max-pages", type=int,
+                   help="page limit per collection (default: none, every page is read); a collection cut short "
+                        "marks the snapshot incomplete and fails `check`")
     x.add_argument("--page-size", type=int, default=200, help="records per page, max 500 (default %(default)s)")
     x.add_argument("--workers", type=int, default=4, help="tenants pulled concurrently (rate limits are per tenant; default %(default)s)")
     x.add_argument("--out", metavar="PATH", help="write here instead of the profile's snapshot path")
@@ -440,6 +442,9 @@ def _query(ctx, args, allow_all=False):
         raise UsageError("Tenant %r is not in this snapshot" % q.tenant,
                          hint="Tenants in %s: %s" % (snap.path, ", ".join(snap.tenant_codes()) or "(none)"))
     desc = snap.describe(as_of=ctx.as_of, max_age_hours=_opt(args, "max_age", 6.0))
+    if desc["complete"] is False:
+        ctx.warnings.append("snapshot is incomplete, so totals that use these collections are too low: %s. Run "
+                            "`servicetitan fetch` again, without --max-pages." % "; ".join(desc["truncated"]))
     if desc["stale"]:
         if _opt(args, "require_fresh"):
             raise DataError("Snapshot is %.1fh old (limit %.0fh)" % (desc["ageHours"] or -1, _opt(args, "max_age", 6.0)),
@@ -743,13 +748,15 @@ def cmd_status(ctx, args):
 
 def cmd_fetch(ctx, args):
     from .fetch import build_snapshot
-    from .snapshot import load_snapshot
+    from .snapshot import load_snapshot, truncated_collections
     out_path = args.out or ctx.data_path
     if args.max_age is not None and os.path.exists(out_path):
         try:
             existing = load_snapshot(out_path)
             age = existing.age_hours(ctx.as_of)
-            if age is not None and age <= args.max_age and not existing.is_demo:
+            # An incomplete snapshot is never fresh enough to keep, however young.
+            fresh = age is not None and age <= args.max_age and not existing.is_demo
+            if fresh and not truncated_collections(existing.data):
                 return {"skipped": True, "reason": "snapshot is %.1fh old (max-age %.1fh)" % (age, args.max_age),
                         "snapshot": existing.describe(as_of=ctx.as_of, max_age_hours=args.max_age)}
         except DataError:
@@ -783,8 +790,13 @@ def cmd_fetch(ctx, args):
     with open(out_path, "w", encoding="utf-8") as f:
         json.dump(snapshot, f, indent=1)
     progress("Wrote %s" % out_path, ctx.quiet)
+    cut = truncated_collections(snapshot)
+    if cut:
+        ctx.warnings.append("snapshot is incomplete, so totals that use these collections are too low and `check` "
+                            "fails: %s" % "; ".join(cut))
     result = {"written": os.path.abspath(out_path), "generatedAt": snapshot["generatedAt"],
               "tenants": [t["code"] for t in snapshot["tenants"]], "partial": partial,
+              "complete": None if cut is None else not cut,
               "counts": {k: len(snapshot.get(k) or []) for k in ("jobs", "opportunities", "ar", "purchaseOrders", "calls",
                                                                   "memberships", "technicians", "businessUnits", "campaigns")},
               "pulls": snapshot.get("pulls"), "next": "servicetitan metrics all  |  servicetitan render"}
@@ -1009,6 +1021,9 @@ def cmd_api(ctx, args):
                 pages = page
                 items.extend(batch)
             env.update({"pages": pages, "count": len(items), "truncated": client.last_truncated, "data": items})
+            if client.last_truncated:
+                from .api import STOP_REASONS
+                env["truncatedBecause"] = STOP_REASONS[client.last_stop]
             return env
         body = client.get(sub.path, params)
         if sub.raw:
@@ -1107,7 +1122,7 @@ def cmd_setup(ctx, args):
 
     def fetch_now(name):
         fresh = Context(profile=name, quiet=ctx.quiet, store_path=ctx.store.path)
-        return cmd_fetch(fresh, argparse.Namespace(max_age=None, out=None, max_pages=100, page_size=200, workers=4,
+        return cmd_fetch(fresh, argparse.Namespace(max_age=None, out=None, max_pages=None, page_size=200, workers=4,
                                                    index=False))
     return run_setup(ctx, profile=_opt(args, "profile"), environment=args.environment, offer_fetch=not args.no_fetch,
                      fetch_fn=fetch_now)

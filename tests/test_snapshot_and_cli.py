@@ -223,6 +223,30 @@ def test_cli_offline_flow(capsys, isolated_home, demo_path):
     assert code == 0 and out["ok"] is True
 
 
+def test_cli_flags_an_incomplete_snapshot(capsys, isolated_home, tmp_path, demo_data):
+    data = json.loads(json.dumps(demo_data))
+    data["pulls"] = {"SPR": {"truncated": [{"collection": "calls", "path": "telecom/v3/calls", "records": 20000,
+                                            "pages": 100, "reason": "max-pages"}]},
+                     "LOC2": {"truncated": []}}
+    path = tmp_path / "cut.json"
+    path.write_text(json.dumps(data))
+    line = "SPR calls: 20,000 records, then stopped at the page limit; more pages remain"
+
+    code, out, err = run_cli(capsys, "metrics", "office", "--data", str(path), "--compact")
+    assert code == 0 and out["snapshot"]["complete"] is False and out["snapshot"]["truncated"] == [line]
+    assert "warning: snapshot is incomplete" in err and line in err
+
+    code, out, err = run_cli(capsys, "brief", "--data", str(path))
+    assert code == 0 and any(f.startswith("snapshot is incomplete") for f in out["flags"])
+
+    code, out, err = run_cli(capsys, "check", "--data", str(path))
+    failed = [c for c in json.loads(err)["error"]["details"]["checks"] if not c["ok"]]
+    assert code == 6 and [c["check"] for c in failed] == ["complete"] and line in failed[0]["detail"]
+
+    code, out, err = run_cli(capsys, "status", "--data", str(path))
+    assert code == 0 and out["snapshot"]["complete"] is False
+
+
 def test_cli_errors_are_structured(capsys, isolated_home, demo_path):
     code, out, err = run_cli(capsys, "metrics", "revenue", "--data", "missing.json")
     assert code == 7 and out is None and json.loads(err)["error"]["code"] == "DATA"

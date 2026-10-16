@@ -39,12 +39,19 @@ ap-bills and inventory-bills); they are not part of the snapshot yet.
 
 CALLS are rolled up to one row per (day, agent, campaign, direction); the
 dashboard only shows counts, so this is lossless and much smaller.
+
+EVERY COLLECTION IS READ TO THE END. Paging follows ServiceTitan's
+``hasMore`` with no page limit unless ``--max-pages`` sets one, and a record
+seen twice while paging counts once. A collection that stops early anyway is
+listed in its tenant's ``stats.truncated``; the snapshot then reports
+``complete: false`` and ``check`` fails, because every total built from it
+would be too low.
 """
 import datetime as dt
 from concurrent.futures import ThreadPoolExecutor
 
 from . import __version__
-from .api import ServiceTitanClient
+from .api import STOP_REASONS, ServiceTitanClient
 from .dates import UTC, iso_z
 from .errors import ApiError
 from .output import progress as _progress
@@ -95,19 +102,25 @@ def dept_for_business_unit(name, mapping):
     return "Other"
 
 
-def pull_tenant(client, cfg, tenant, op_start, ar_start, max_pages=100, log=None):
+def pull_tenant(client, cfg, tenant, op_start, ar_start, max_pages=None, log=None):
     """Snapshot slice for one tenant. Returns a dict of collections plus stats."""
     log = log or (lambda m: None)
     code = tenant["code"]
     mapping = cfg["departmentMapping"]
     low_ticket = cfg["rules"]["lowTicketThreshold"]
     warnings = []
+    truncated = []
 
     def key(raw):
         return None if raw is None else "%s:%s" % (code, raw)
 
     def pages(path, params, label):
-        return client.get_all(path, params, max_pages=max_pages, label=label)
+        rows = client.get_all(path, params, max_pages=max_pages, label=label)
+        if client.last_truncated:
+            truncated.append({"collection": label, "path": path, "records": len(rows), "pages": client.last_pages,
+                              "reason": client.last_stop})
+            warnings.append("%s incomplete at %d records: %s" % (label, len(rows), STOP_REASONS[client.last_stop]))
+        return rows
 
     out = {}
     log("[%s] business units, technicians, employees..." % code)
@@ -138,9 +151,13 @@ def pull_tenant(client, cfg, tenant, op_start, ar_start, max_pages=100, log=None
     completed_jobs = pages("jpm/v2/jobs", {"jobStatus": "Completed", "completedOnOrAfter": op_start}, "jobs-completed")
     # jobStatus values: Scheduled, Dispatched, InProgress, Hold, Completed, Canceled. Everything but
     # Completed/Canceled is open work; a Dispatched job with a later appointment is still on the board.
-    open_jobs = []
+    # A job can change status between these pulls (Scheduled, then Dispatched); keyed by id, the later pull
+    # wins instead of the job being counted twice.
+    open_by_id = {}
     for status in ("Scheduled", "Dispatched", "InProgress", "Hold"):
-        open_jobs += pages("jpm/v2/jobs", {"jobStatus": status, "createdOnOrAfter": op_start}, "jobs-%s" % status)
+        for j in pages("jpm/v2/jobs", {"jobStatus": status, "createdOnOrAfter": op_start}, "jobs-%s" % status):
+            open_by_id[j["id"]] = j
+    open_jobs = list(open_by_id.values())
 
     now_iso = iso_z(dt.datetime.now(UTC))
     future_appts = pages("jpm/v2/appointments", {"startsOnOrAfter": now_iso}, "appointments")
@@ -351,7 +368,7 @@ def pull_tenant(client, cfg, tenant, op_start, ar_start, max_pages=100, log=None
         "openInvoices": len(out["ar"]), "unbilledInvoicesExcluded": len(unbilled),
         "unbilledBalanceExcluded": round(unbilled_total, 2), "purchaseOrders": len(pos), "openPurchaseOrders": len(open_pos),
         "calls": len(calls), "memberships": len(memberships), "customers": len(customers),
-        "requests": client.requests_made, "warnings": warnings,
+        "requests": client.requests_made, "truncated": truncated, "warnings": warnings,
     }
     log("[%s] %d completed, %d booked ($%s), %d stale skipped, %d opportunities from %d estimates, %d open invoices, %d calls"
         % (code, done, len(booked), "{:,.0f}".format(out["stats"]["bookedRevenue"]), skipped, len(opportunities),
@@ -359,7 +376,7 @@ def pull_tenant(client, cfg, tenant, op_start, ar_start, max_pages=100, log=None
     return out
 
 
-def build_snapshot(ctx, tenants=None, max_pages=100, page_size=None, quiet=False, client_factory=None, workers=4):
+def build_snapshot(ctx, tenants=None, max_pages=None, page_size=None, quiet=False, client_factory=None, workers=4):
     """Pull every (or the selected) tenant and merge into one snapshot dict.
 
     Tenants are pulled concurrently (``workers`` at a time): ServiceTitan's

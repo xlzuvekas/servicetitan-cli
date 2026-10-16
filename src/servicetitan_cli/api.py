@@ -11,7 +11,8 @@ Facts this client is built on (from ServiceTitan's developer documentation):
   one run of the same report per minute). 429s are retried with backoff.
 * List endpoints page with ``page``/``pageSize`` and answer
   ``{"page", "pageSize", "hasMore", "totalCount", "data"}``. ``pageSize``
-  defaults to 50 and the documented maximum is 500.
+  defaults to 50; most lists document no maximum, so this client stays at or
+  under 500. Only ``hasMore`` says whether more pages remain.
 * Export endpoints (``.../export/<collection>``) stream every record with a
   ``from`` continuation token and ``continueFrom``/``hasMore`` in the answer.
 
@@ -40,6 +41,13 @@ AUTH_URLS = {"production": "https://auth.servicetitan.io/connect/token",
              "integration": "https://auth-integration.servicetitan.io/connect/token"}
 DEFAULT_PAGE_SIZE = 200
 MAX_PAGE_SIZE = 500
+PROGRESS_EVERY_PAGES = 25
+# Why get_pages stopped before ServiceTitan's last page (``last_stop``).
+STOP_REASONS = {
+    "max-pages": "stopped at the page limit; more pages remain",
+    "empty-page": "ServiceTitan said more pages remained but sent an empty one",
+    "repeated-page": "ServiceTitan resent records it had already sent, so paging was not advancing",
+}
 TOKEN_LIFETIME_S = 15 * 60
 TOKEN_REFRESH_MARGIN_S = 60
 RATE_LIMIT_CALLS, RATE_LIMIT_WINDOW_S = 600, 10.0
@@ -140,6 +148,8 @@ class ServiceTitanClient(object):
         self._recent = []
         self.requests_made = 0
         self.last_truncated = False
+        self.last_stop = None
+        self.last_pages = 0
 
     # ------------------------------------------------------------ auth
     @property
@@ -321,10 +331,18 @@ class ServiceTitanClient(object):
                        details={"problem": problem} if problem else None)
 
     def get_pages(self, path, params=None, max_pages=None, page_size=None):
-        """Yield (page_number, items, body) for a paged list endpoint until hasMore is false."""
+        """Yield (page_number, items, body) for a paged list endpoint until hasMore is false.
+
+        ``hasMore`` is the only authoritative end-of-list signal (docs/servicetitan-api.md 5.1), so there is
+        no limit unless ``max_pages`` sets one. Two answers that would otherwise page forever also stop it:
+        hasMore on an empty page, and a page on which most records arrived on earlier pages (the server is not
+        advancing; its new records are still yielded). Any early stop sets ``last_truncated`` and names the
+        reason in ``last_stop`` (a key of ``STOP_REASONS``).
+        """
         size = min(int(page_size or self.page_size), MAX_PAGE_SIZE)
         page = 1
-        self.last_truncated = False
+        seen = set()
+        self.last_truncated, self.last_stop, self.last_pages = False, None, 0
         while True:
             body = self.get(path, dict(params or {}, page=page, pageSize=size))
             if isinstance(body, dict):
@@ -334,20 +352,45 @@ class ServiceTitanClient(object):
                 items, has_more = body, False
             else:
                 items, has_more = [], False
-            yield page, items, body
+            ids = [x.get("id") for x in items if isinstance(x, dict) and x.get("id") is not None]
+            fresh = [i for i in ids if i not in seen]
+            seen.update(ids)
+            repeated = len(fresh) * 2 < len(ids)
+            if fresh or not ids:
+                self.last_pages = page
+                yield page, items, body
             if not has_more:
                 return
-            if max_pages and page >= max_pages:
-                self.last_truncated = True
+            stop = ("repeated-page" if repeated else "empty-page" if not items
+                    else "max-pages" if max_pages and page >= max_pages else None)
+            if stop:
+                self.last_truncated, self.last_stop = True, stop
                 return
             page += 1
 
     def get_all(self, path, params=None, max_pages=None, page_size=None, label=None):
-        items = []
+        """Every record of a paged list, one per id.
+
+        A long pull can see a record twice when others are added or change while it pages, which shifts
+        page boundaries; the later copy replaces the earlier one. Records without an id are all kept.
+        With ``label``, progress is reported every ``PROGRESS_EVERY_PAGES`` pages and on an early stop.
+        """
+        items, position = [], {}
         for page, batch, _ in self.get_pages(path, params, max_pages=max_pages, page_size=page_size):
-            items.extend(batch)
+            for x in batch:
+                rid = x.get("id") if isinstance(x, dict) else None
+                if rid is None:
+                    items.append(x)
+                elif rid in position:
+                    items[position[rid]] = x
+                else:
+                    position[rid] = len(items)
+                    items.append(x)
+            if label and page % PROGRESS_EVERY_PAGES == 0:
+                self.progress("   [%s] %s: %s records so far" % (self.creds.code, label, "{:,}".format(len(items))))
         if self.last_truncated:
-            self.progress("   [%s] hit the %d-page cap; results are truncated" % (label or path, max_pages))
+            self.progress("   [%s] %s incomplete at %s records: %s"
+                          % (self.creds.code, label or path, "{:,}".format(len(items)), STOP_REASONS[self.last_stop]))
         return items
 
     def export(self, path, from_token=None, include_recent_changes=False, max_batches=None):
