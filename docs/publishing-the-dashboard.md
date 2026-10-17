@@ -1,5 +1,9 @@
 # Publishing the dashboard as an app
 
+> **Experimental.** The dashboard and this guide may change between versions.
+> Every page carries a line saying it is unofficial and experimental; keep it
+> if you edit the template. The dashboard is not a ServiceTitan product.
+
 `servicetitan render` produces one self-contained HTML file. "Making it an
 app" almost never means a native app; it means putting that file somewhere
 people (and a TV in the office) can open it from a bookmark or a home-screen

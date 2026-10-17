@@ -15,7 +15,7 @@ import getpass
 import os
 import sys
 
-from . import __version__
+from . import UNOFFICIAL, __version__
 from .dates import UTC, get_tz, iso_z, parse_iso
 from .errors import CliError, ConfigError, UsageError
 from .paths import config_dir
@@ -157,6 +157,7 @@ def run_setup(ctx, profile=None, environment=None, offer_fetch=True, prompter=No
     secrets = ctx.secrets
 
     p.say("Set up servicetitan-cli")
+    p.say(UNOFFICIAL)
     p.say("")
     p.say("You need four values from ServiceTitan: the app key, tenant ID, client ID and client secret.")
     p.say("No values yet? Follow docs/setup-servicetitan-api-access.md (about ten minutes), then run this again.")

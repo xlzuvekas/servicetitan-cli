@@ -26,13 +26,14 @@ from .errors import CliError
 from .output import json_default
 
 SERVER_NAME = "st-operator"
-SERVER_TITLE = "ST Operator: third-party tools for ServiceTitan data"
+SERVER_TITLE = "ST Operator: unofficial third-party tools for ServiceTitan data"
 PROTOCOL_VERSIONS = ("2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05")   # newest first
 MAX_TEXT = 60000              # characters in one tool answer; larger results are kept locally and summarised
 DEFAULT_REFRESH_MAX_AGE = 6.0
 
 INSTRUCTIONS = (
-    "Third-party tools for one company's ServiceTitan data; not affiliated with ServiceTitan. Start with status. "
+    "Unofficial third-party tools for one company's ServiceTitan data; not affiliated with ServiceTitan. Start "
+    "with status. "
     "brief, metrics and list_records answer from a local snapshot: if status says it is missing, stale or "
     "incomplete, call refresh first (a full pull takes minutes). Before quoting a number to a person, call "
     "metrics with explain true once and keep the definition with the number. For anything the snapshot does not hold, find the "

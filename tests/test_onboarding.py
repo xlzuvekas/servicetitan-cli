@@ -90,7 +90,7 @@ def test_setup_happy_path_tests_before_saving_and_offers_the_first_pull(isolated
     assert store.effective("acme")["writes"]["allow"] == [] and store.effective("acme")["company"]["name"] == "Acme Home Services"
     assert creds == {"acme/MAIN/appKey": "ak-1", "acme/MAIN/clientSecret": "s3cret"}
     log = err.getvalue()
-    for line in ("Step 1 of 4", "Step 2 of 4", "Step 3 of 4", "Step 4 of 4", "Connected. 4 business unit(s)", "Saved.",
+    for line in ("servicetitan-cli is unofficial", "Step 1 of 4", "Step 2 of 4", "Step 3 of 4", "Step 4 of 4", "Connected. 4 business unit(s)", "Saved.",
                  "The tenant ID is all digits", "All set. Next: servicetitan brief"):
         assert line in log, line
     assert "s3cret" not in log and "ak-1" not in log                # secrets are never echoed

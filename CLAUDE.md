@@ -36,6 +36,12 @@ Python 3.9+, `requests` + `keyring` only. Source in `src/servicetitan_cli/`, tes
   out of commit messages, branch names and pull requests too. The repository
   is public: anything pushed can be read by anyone, and rewriting history
   does not take it back.
+- **Unofficial, and says so; the dashboard is experimental.** README, SETUP.md,
+  `--help`, `setup`, `schema`, the MCP server and every rendered page say the
+  tool is not made, endorsed or supported by ServiceTitan, and label `render`,
+  its template, `palette` and the publishing guide experimental. The wording
+  lives in `UNOFFICIAL` and `DASHBOARD_EXPERIMENTAL` (`__init__.py`). Keep both
+  notices when changing those surfaces, and never use ServiceTitan's logo.
 - **Setup is guided and secrets stay out of chats.** `servicetitan setup`
   (`onboarding.py`) is the interactive path for people; it refuses without a
   terminal and prints the scripted `profile add` + `tenant add` equivalent.

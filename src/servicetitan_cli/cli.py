@@ -17,7 +17,7 @@ import os
 import sys
 import threading
 
-from . import __version__
+from . import DASHBOARD_EXPERIMENTAL, UNOFFICIAL, __version__
 from .config import Context
 from .dates import RANGE_KINDS, parse_iso
 from .errors import CliError, ConfigError, DataError, UsageError, ValidationError
@@ -41,7 +41,7 @@ examples:
   servicetitan list jobs --range last7 --booked --fields jobNumber,date,customer,revenue
   servicetitan api get jpm/v2/jobs --param jobStatus=Completed --param pageSize=10
   servicetitan api endpoints --search "appointments"
-  servicetitan render --out dashboard.html
+  servicetitan render --out dashboard.html  # experimental HTML dashboard
   servicetitan schema                       # machine-readable description of everything above
 """
 
@@ -91,10 +91,12 @@ def _range_args(p, default="mtd", allow_all=False):
 def build_parser():
     root = argparse.ArgumentParser(
         prog="servicetitan",
-        description="ServiceTitan CLI built for AI agents. JSON in, JSON out. Reads by default; a write runs only "
-                    "with --write, a profile allowlist match and the operation's :w scope.",
+        description="Unofficial ServiceTitan CLI built for AI agents: not made, endorsed or supported by "
+                    "ServiceTitan. JSON in, JSON out. Reads by default; a write runs only with --write, a profile "
+                    "allowlist match and the operation's :w scope. The HTML dashboard (render, palette) is "
+                    "experimental.",
         epilog=EXAMPLES, formatter_class=argparse.RawDescriptionHelpFormatter)
-    root.add_argument("--version", action="version", version="servicetitan-cli %s" % __version__)
+    root.add_argument("--version", action="version", version="servicetitan-cli %s (unofficial; not affiliated with ServiceTitan)" % __version__)
     _common(root)
     sub = root.add_subparsers(dest="command", metavar="<command>")
 
@@ -214,7 +216,8 @@ def build_parser():
     x.add_argument("--index", action="store_true", help="then update the local semantic index (needs the index extra)")
     x = _sub(sub, "check", "run the snapshot integrity checks (exit 6 on failure)")
     x.add_argument("--max-age", type=float, default=6.0, metavar="HOURS")
-    x = _sub(sub, "render", "build the self-contained dashboard.html (validates first)")
+    x = _sub(sub, "render", "experimental: build the self-contained dashboard.html (validates first)",
+             description=DASHBOARD_EXPERIMENTAL + " " + UNOFFICIAL)
     x.add_argument("--out", default="dashboard.html", metavar="PATH")
     x.add_argument("--brand-dir", default="brand", metavar="DIR", help="folder with logo-light.png / logo-dark.png")
     x.add_argument("--template", metavar="PATH", help="custom template instead of the bundled one")
@@ -357,7 +360,8 @@ def build_parser():
     x.add_argument("--read-only", action="store_true", help="leave the api_write tool out entirely")
 
     # ---- misc
-    x = _sub(sub, "palette", "validate chart colours for accessibility (band, chroma, contrast, colour-blind separation)")
+    x = _sub(sub, "palette", "experimental, for the dashboard: validate chart colours for accessibility (band, chroma, "
+                             "contrast, colour-blind separation)")
     x.add_argument("colours", help="comma-separated hex colours in series order")
     x.add_argument("--mode", choices=("light", "dark"), default="light")
     x.add_argument("--surface", help="chart surface colour (defaults per mode)")
@@ -847,6 +851,7 @@ def cmd_render(ctx, args):
     report = render_dashboard(snap, settings, args.out, brand_dir=args.brand_dir, template_path=args.template,
                               skip_checks=args.skip_checks, max_age_hours=args.max_age, as_of=ctx.as_of, expected_codes=codes,
                               full=args.full)
+    progress("note: %s" % DASHBOARD_EXPERIMENTAL, ctx.quiet)
     return report
 
 

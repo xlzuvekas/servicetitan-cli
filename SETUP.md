@@ -3,8 +3,10 @@
 `servicetitan` is a command-line tool that reads a company's ServiceTitan data
 and answers questions about it: revenue, service calls, sales, receivables,
 memberships and call handling. You can run it yourself in a terminal, or let an
-AI assistant such as Claude run it for you. It is an independent, third-party
-tool, not made or supported by ServiceTitan.
+AI assistant such as Claude run it for you.
+
+**It is unofficial:** an independent tool, not made, endorsed or supported by
+ServiceTitan. Its optional HTML dashboard is experimental.
 
 Setup takes about half an hour, most of it in ServiceTitan getting the API
 credentials. When you finish:
@@ -29,7 +31,9 @@ with you before moving on.
 
 **Instructions for Claude**, or any other assistant guiding someone through this file:
 
-1. Ask which operating system they use. Give commands for that system only, and
+1. Before anything else, tell them this is an unofficial tool, not made or
+   supported by ServiceTitan, so they know whose software they are connecting.
+   Then ask which operating system they use. Give commands for that system only, and
    tell them how to open a terminal there (step 2 explains).
 2. Go one step at a time. After each command, ask them to paste what it printed
    and compare it with the "You should see" line before moving on.
@@ -186,7 +190,7 @@ servicetitan brief
 receivables, memberships and any flags worth a look. If it says there is no
 snapshot, run `servicetitan fetch` first.
 
-README.md covers daily use: more questions to ask, the dashboard
+README.md covers daily use: more questions to ask, the experimental dashboard
 (`servicetitan render --out dashboard.html`), and keeping the data fresh
 (`servicetitan fetch --max-age 6`).
 

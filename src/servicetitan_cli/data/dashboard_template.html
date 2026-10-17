@@ -123,6 +123,13 @@
     font-family: var(--font-display); font-size: 20px; font-weight: 700;
     letter-spacing: -0.01em; color: var(--text-primary); white-space: nowrap;
   }
+  /* Always shown: this page is not a ServiceTitan product, and the dashboard is
+     experimental. Quiet on purpose, but never removed. */
+  .notice-bar {
+    background: var(--surface-2); color: var(--text-secondary);
+    border-bottom: 1px solid var(--border);
+    font-size: 12px; text-align: center; padding: 6px 20px;
+  }
   /* Demo-data banner. Deliberately loud -- demo figures must never be mistaken
      for a real reading of the business. */
   .demo-banner {
@@ -343,6 +350,9 @@
 <body>
 
 <div class="tooltip" id="tooltip"></div>
+
+<div class="notice-bar" id="noticeBar" role="note">Unofficial and experimental: this dashboard is not made,
+  endorsed or supported by ServiceTitan. Check its figures in ServiceTitan before acting on them.</div>
 
 <header class="top">
   <div class="top-inner">
@@ -1613,7 +1623,9 @@ function targetCaption(){
   }
 
   document.getElementById("footNote").textContent =
-    `${name} \u00b7 Internal operations dashboard \u00b7 All figures pull live from ServiceTitan. ` +
+    `${name} \u00b7 Internal operations dashboard, experimental \u00b7 Built with servicetitan-cli, an ` +
+    `unofficial tool not made, endorsed or supported by ServiceTitan, from a snapshot of this account's ` +
+    `ServiceTitan data. ` +
     `Booked revenue reflects jobs priced on the dispatch board; membership attach is derived from ` +
     `same-day membership sales.`;
 
@@ -1635,7 +1647,7 @@ function targetCaption(){
   const hoursOld = (Date.now() - genOn) / 3600000;
   const stale = hoursOld > 12;
   el.classList.toggle("stale", stale);
-  el.innerHTML = `<span class="dot"></span>${LIVE_DATA.isDemo ? "Demo data" : "Live from ServiceTitan"} · ${stamp}` +
+  el.innerHTML = `<span class="dot"></span>${LIVE_DATA.isDemo ? "Demo data" : "Pulled from ServiceTitan"} · ${stamp}` +
     (stale ? ` · ${Math.floor(hoursOld/24) >= 1 ? Math.floor(hoursOld/24)+"d" : Math.floor(hoursOld)+"h"} old` : "");
 })();
 </script>

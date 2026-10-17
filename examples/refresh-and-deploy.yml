@@ -1,4 +1,6 @@
 # Scheduled refresh of the ServiceTitan dashboard from GitHub Actions.
+# The dashboard is experimental, and servicetitan-cli is unofficial (not made,
+# endorsed or supported by ServiceTitan).
 #
 # Copy to .github/workflows/ in a PRIVATE repository, add these repository
 # secrets: SERVICETITAN_TENANT_ID, SERVICETITAN_CLIENT_ID,

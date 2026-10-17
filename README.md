@@ -4,8 +4,15 @@ A ServiceTitan command-line tool built for AI agents and the people who work
 with them. It reads by default; a write runs only behind an explicit flag, a
 per-profile allowlist and the matching API scope.
 
-It is an independent, third-party tool: not made, endorsed or supported by
-ServiceTitan.
+> **Unofficial.** servicetitan-cli is an independent project. It is not made,
+> endorsed, sponsored or supported by ServiceTitan, Inc. It works through
+> ServiceTitan's public API, with credentials you register for your own
+> account.
+>
+> **The HTML dashboard is experimental.** `servicetitan render`, its template,
+> `servicetitan palette` and the publishing guide may change between versions
+> without notice. Check the dashboard's figures in ServiceTitan before you act
+> on them or share the page.
 
 **Setting it up for the first time?** Follow [SETUP.md](SETUP.md). Or give this
 folder, or its zip, to Claude and say "help me set this up": SETUP.md tells
@@ -40,8 +47,9 @@ into the chat.
   disk, and an optional local LlamaIndex makes every stored record, saved
   result, API operation and definition searchable by meaning, with embeddings
   computed on the machine so nothing leaves it.
-- **The dashboard is still here.** `servicetitan render` writes the same
-  single-file operations dashboard the template produced.
+- **The dashboard is still here, as an experiment.** `servicetitan render`
+  writes the same single-file operations dashboard the template produced. Each
+  page says it is unofficial and experimental.
 
 With a read-only app registration, which the setup guide recommends, every
 ServiceTitan call is a `GET` and the only `POST` is the OAuth token exchange
@@ -137,7 +145,7 @@ servicetitan metrics sales --range qtd --tenant NORTH
 servicetitan list jobs --range next7 --booked --fields jobNumber,date,customer,revenue
 servicetitan list memberships --renews-within 30
 servicetitan api jpm appointments list --starts-on-or-after 2026-09-16T00:00:00Z --all
-servicetitan render --out dashboard.html
+servicetitan render --out dashboard.html          # experimental
 servicetitan list invoices --min-days-past-due 60 --save   # keep this result; searchable once indexed
 ```
 
@@ -288,11 +296,11 @@ built from that collection would be too low.
 | `list <kind>` | `jobs`, `opportunities`, `invoices`, `purchase-orders`, `calls`, `memberships`, `technicians`, `campaigns`, `business-units`, `people`, with filters, `--sort`, `--fields`, `--limit`, `--count`. |
 | `api <module> <resource> <operation>` | The whole API as a tree; `--help`/`--describe` at every level. Reads run live; writes need `--write`, an allowlist match and the `:w` scope, with `--dry-run` to preview. |
 | `api get <path>` / `api endpoints` / `api modules` / `api audit` | Raw path access, catalogue search and the write audit log. |
-| `render` | Build `dashboard.html` (validates first; never overwrites a good dashboard with a broken pull). |
+| `render` | Experimental. Build `dashboard.html` (validates first; never overwrites a good dashboard with a broken pull). |
 | `mcp` | Local MCP server (st-operator) over stdio; `--client-config` prints client setup, `--read-only` drops the write tool. |
 | `index build/status/query/results` | Local semantic index over stored records, saved results, the API catalogue, definitions and docs (optional extra). |
 | `duplicates` | People who may hold two ServiceTitan user records. |
-| `palette` | Accessibility check for chart colours. |
+| `palette` | Experimental. Accessibility check for the dashboard's chart colours. |
 | `schema` | Machine-readable description of all of the above. |
 | `init` | Checklist for this machine: what is set up, what is next, and the command to run now. |
 
@@ -454,8 +462,8 @@ python scripts/build_endpoint_catalogue.py   # refresh the endpoint catalogue fr
 `docs/servicetitan-api.md` collects what the ServiceTitan documentation says
 about auth, paging, rate limits and the data model, with sources.
 `docs/publishing-the-dashboard.md` covers hosting the rendered page as an
-installable app with a scheduled refresh. `BRANDING.md` covers logos, colours
-and type.
+installable app with a scheduled refresh, and `BRANDING.md` covers logos,
+colours and type; both describe the experimental dashboard.
 
 ## Migrating from the dashboard template
 
@@ -469,6 +477,16 @@ and type.
 | `python validate_palette.py ...` | `servicetitan palette ...` |
 | `config.json` + `.env` | `servicetitan profile import`, or keep using them in place |
 
+## Not affiliated with ServiceTitan
+
+ServiceTitan is a trademark of ServiceTitan, Inc. This project is not
+affiliated with, endorsed by, sponsored by or supported by ServiceTitan, Inc.,
+and its name is used only to say which product the tool works with. Your use of
+the ServiceTitan API is governed by your own agreement with ServiceTitan. For
+help with this tool, open an issue here rather than contacting ServiceTitan
+support.
+
 ## License
 
-MIT.
+MIT; see [LICENSE](LICENSE). The software is provided as is, without warranty
+of any kind.

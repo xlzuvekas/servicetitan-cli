@@ -4,6 +4,7 @@ import json
 import os
 import pkgutil
 
+from . import DASHBOARD_EXPERIMENTAL, UNOFFICIAL
 from .errors import ValidationError, DataError
 from .snapshot import check_snapshot, problems
 
@@ -98,6 +99,8 @@ def render_dashboard(snapshot, settings, out_path, brand_dir="brand", template_p
         "kb": round(len(html.encode("utf-8")) / 1024.0),
         "logos": "custom" if light else "wordmark",
         "isDemo": snapshot.is_demo,
+        "experimental": True,
+        "notice": "%s %s" % (DASHBOARD_EXPERIMENTAL, UNOFFICIAL),
         "checks": results,
         "checksSkipped": bool(bad and skip_checks),
     }

@@ -1,7 +1,7 @@
 """Machine-readable description of the CLI, for agents to read once."""
 import argparse
 
-from . import __version__
+from . import DASHBOARD_EXPERIMENTAL, UNOFFICIAL, __version__
 from .errors import EXIT_CODES
 from .listing import KINDS
 from .metrics import AREAS, DEFINITIONS
@@ -86,7 +86,9 @@ def build_schema(parser):
     return {
         "name": "servicetitan",
         "version": __version__,
-        "purpose": "ServiceTitan CLI for AI agents. Reads by default; writes exist for every documented operation but run only behind three explicit gates (see conventions.writes).",
+        "notice": UNOFFICIAL,
+        "experimental": {"commands": ["servicetitan render", "servicetitan palette"], "why": DASHBOARD_EXPERIMENTAL},
+        "purpose": "Unofficial ServiceTitan CLI for AI agents. Reads by default; writes exist for every documented operation but run only behind three explicit gates (see conventions.writes).",
         "conventions": {
             "stdout": "exactly one JSON document per invocation (pretty by default; --compact for one line). --format text renders the same structure for people; --format csv writes the result's main table (records, data, hits ...).",
             "stderr": "progress lines and JSON error envelopes {\"error\": {code, exit, message, hint, details}}.",

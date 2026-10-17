@@ -1,6 +1,7 @@
 # servicetitan-cli for agents
 
-You are driving a ServiceTitan tool that reads by default. Nothing changes in
+You are driving an unofficial ServiceTitan tool (not made, endorsed or supported by
+ServiceTitan) that reads by default. Nothing changes in
 ServiceTitan unless you run an `api` write operation with `--write` and the
 profile's allowlist permits it (see Writes below). Every command prints one
 JSON document on stdout. Errors are JSON
@@ -182,5 +183,7 @@ The `hint` field of an error says what to do next.
   the next command.
 - Do not paste secrets into command arguments; use `--client-secret-stdin`
   or `--client-secret-env VAR`.
+- `render` and `palette` (the HTML dashboard) are experimental. Say so when you share the page, and
+  never present the tool's output as ServiceTitan's own reports.
 - Do not send snapshot files or rendered dashboards outside the company: they
   contain customer names and revenue.

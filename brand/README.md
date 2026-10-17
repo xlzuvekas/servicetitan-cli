@@ -7,8 +7,10 @@ logo-light.png     used on light backgrounds
 logo-dark.png      used on dark backgrounds
 ```
 
-Both are optional. With neither, the header shows your profile's company name
-set as a wordmark, which looks intentional rather than unfinished.
+Use your company's logo, never ServiceTitan's: the dashboard is not a
+ServiceTitan product. Both files are optional. With neither, the header shows
+your profile's company name set as a wordmark, which looks intentional rather
+than unfinished.
 
 With only `logo-light.png`, that file is used in both themes.
 

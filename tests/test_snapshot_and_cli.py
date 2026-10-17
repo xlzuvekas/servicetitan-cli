@@ -207,6 +207,7 @@ def test_cli_offline_flow(capsys, isolated_home, demo_path):
     assert code == 0 and os.path.getsize(html) > 100000 and out["isDemo"] is True
     text = open(html, encoding="utf-8").read()
     assert "__LIVE_DATA_JSON__" not in text and '"isDemo":true' in text
+    assert out["experimental"] is True and "Unofficial and experimental" in text and "unofficial tool" in text
     assert '"jobType"' not in text  # agent-only fields stay out of the shared page
     code, out2, _ = run_cli(capsys, "render", "--data", demo_path, "--out", html, "--full")
     assert code == 0 and out2["bytes"] > out["bytes"] and '"jobType"' in open(html, encoding="utf-8").read()
@@ -245,6 +246,18 @@ def test_cli_flags_an_incomplete_snapshot(capsys, isolated_home, tmp_path, demo_
 
     code, out, err = run_cli(capsys, "status", "--data", str(path))
     assert code == 0 and out["snapshot"]["complete"] is False
+
+
+def test_help_version_and_schema_say_it_is_unofficial(capsys, isolated_home):
+    from servicetitan_cli import UNOFFICIAL
+    code, out, _ = run_cli(capsys, "--help")
+    assert code == 0 and "Unofficial ServiceTitan CLI" in out and "experimental" in out
+    code, out, _ = run_cli(capsys, "render", "--help")
+    assert code == 0 and "experimental" in out
+    code, out, _ = run_cli(capsys, "--version")
+    assert code == 0 and "unofficial" in out
+    code, out, _ = run_cli(capsys, "schema")
+    assert out["notice"] == UNOFFICIAL and out["experimental"]["commands"] == ["servicetitan render", "servicetitan palette"]
 
 
 def test_cli_errors_are_structured(capsys, isolated_home, demo_path):

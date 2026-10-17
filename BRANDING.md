@@ -1,5 +1,9 @@
 # Branding the dashboard
 
+> The dashboard is experimental and unofficial. Brand it as your company's own
+> internal tool, but keep the line that says it is not made by ServiceTitan, and
+> do not use ServiceTitan's name or logo as its branding.
+
 The default theme is deliberately neutral — considered, but not anyone's brand.
 Three things make it yours: the wordmark or logo, the colour tokens, and the
 type. All three live in the dashboard template, near the top.

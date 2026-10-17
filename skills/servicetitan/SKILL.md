@@ -1,12 +1,13 @@
 ---
 name: servicetitan
-description: Answer questions about a company's ServiceTitan data (revenue, service calls, sales close rate, installs, accounts receivable, marketing, call handling, memberships) and refresh or render its operations dashboard, using the `servicetitan` CLI, which reads by default and writes only behind explicit gates. Use whenever ServiceTitan numbers, jobs, invoices, technicians, campaigns, or the dashboard come up.
+description: Answer questions about a company's ServiceTitan data (revenue, service calls, sales close rate, installs, accounts receivable, marketing, call handling, memberships) and refresh or render its experimental operations dashboard, using the unofficial `servicetitan` CLI, which reads by default and writes only behind explicit gates. Use whenever ServiceTitan numbers, jobs, invoices, technicians, campaigns, or the dashboard come up.
 ---
 
 # ServiceTitan via the servicetitan CLI
 
 The `servicetitan` command is installed on this machine and holds credentials
-for one or more companies. Nothing you run changes ServiceTitan unless you
+for one or more companies. It is unofficial, not a ServiceTitan product: never
+present its numbers or its dashboard as ServiceTitan's own reports. Nothing you run changes ServiceTitan unless you
 run an `api` write operation with `--write` and the profile allows it (see
 Writes below).
 
@@ -119,7 +120,9 @@ servicetitan fetch --max-age 2 && servicetitan render --out dashboard.html
 ```
 
 `render` refuses to write when the snapshot fails its checks; report the
-failed checks from the error's `details` rather than retrying blindly.
+failed checks from the error's `details` rather than retrying blindly. The
+dashboard is experimental: say so when you hand someone the page, and suggest
+they confirm a figure in ServiceTitan before acting on it.
 
 ## Setup and errors
 
