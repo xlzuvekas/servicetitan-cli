@@ -488,5 +488,4 @@ support.
 
 ## License
 
-MIT; see [LICENSE](LICENSE). The software is provided as is, without warranty
-of any kind.
+MIT.

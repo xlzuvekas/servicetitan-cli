@@ -9,7 +9,6 @@ description = "Unofficial, third-party command-line tool and MCP server for Serv
 readme = "README.md"
 requires-python = ">=3.9"
 license = { text = "MIT" }
-authors = [{ name = "Business Bots" }]
 keywords = ["servicetitan", "cli", "agents", "home-services", "dashboard"]
 classifiers = [
   "Environment :: Console",
