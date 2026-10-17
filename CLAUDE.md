@@ -33,9 +33,9 @@ Python 3.9+, `requests` + `keyring` only. Source in `src/servicetitan_cli/`, tes
 - **No client information, ever.** Examples, help text, hints, tests and docs
   use the fictional Acme Home Services with tenant codes MAIN, NORTH and EAST.
   Never commit a client's name, locations, people, ids or data, and keep them
-  out of commit messages too. Share the code as a zip of the tree (GitHub's
-  Download ZIP of `main`, or `git archive`), never a zipped clone: a clone
-  carries `.git` and every old commit.
+  out of commit messages, branch names and pull requests too. The repository
+  is public: anything pushed can be read by anyone, and rewriting history
+  does not take it back.
 - **Setup is guided and secrets stay out of chats.** `servicetitan setup`
   (`onboarding.py`) is the interactive path for people; it refuses without a
   terminal and prints the scripted `profile add` + `tenant add` equivalent.

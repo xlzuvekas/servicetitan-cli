@@ -41,6 +41,6 @@
     "boardDays": 45
   },
 
-  "_personAliases": "One person can hold several ServiceTitan user records. Records with the SAME name merge on their own - every per-person total is keyed by name. Only declare a duplicate here when the two records carry DIFFERENT names, and only once you have confirmed it really is one person: merging two differently-named records on a guess silently combines two people's numbers. Key is '<location code>:<ServiceTitan user id>', value is the canonical name. Run `python check_duplicates.py` to list likely candidates.",
+  "_personAliases": "One person can hold several ServiceTitan user records. Records with the SAME name merge on their own - every per-person total is keyed by name. Only declare a duplicate here when the two records carry DIFFERENT names, and only once you have confirmed it really is one person: merging two differently-named records on a guess silently combines two people's numbers. Key is '<location code>:<ServiceTitan user id>', value is the canonical name. Run `servicetitan duplicates` to list likely candidates.",
   "personAliases": {}
 }

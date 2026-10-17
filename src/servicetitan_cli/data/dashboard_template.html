@@ -400,7 +400,7 @@ __LIVE_DATA_JSON__
 /* ---------------------------- constants -------------------------------- */
 const LIVE_DATA = JSON.parse(document.getElementById("live-data-json").textContent);
 // Everything company-specific -- name, locations, targets, thresholds -- comes
-// from config.json via render_dashboard.py. Nothing below hardcodes a business.
+// from the profile's settings via `servicetitan render`. Nothing below hardcodes a business.
 const CONFIG = JSON.parse(document.getElementById("app-config").textContent);
 const TARGETS = CONFIG.targets || {};
 const TODAY = new Date(); // real current time -- this is a periodically-refreshed live artifact, not a frozen snapshot
@@ -414,7 +414,7 @@ const TECHS = LIVE_DATA.technicians.map(t => ({ id: t.id, name: t.name, loc: t.l
 /* ---------------------------------------------------------------------
    Everything below binds straight to LIVE_DATA from ServiceTitan. All ids
    are namespaced by location ("ESC:5510") because the two tenants reuse the
-   same raw id numbers -- see fetch_dashboard_data.py.
+   same raw id numbers -- see servicetitan_cli/fetch.py.
    --------------------------------------------------------------------- */
 
 // name lookup for anyone who can be credited on a job, estimate, call, or
@@ -429,7 +429,7 @@ function dkey(d) { return d.toISOString().slice(0,10); }
 
 // Jobs: completed jobs are dated by completedOn; booked jobs by their next
 // future appointment. Revenue, tech, membershipSold, options and lowTicket are
-// all derived server-side -- see fetch_dashboard_data.py for the rules.
+// all derived server-side -- see servicetitan_cli/fetch.py for the rules.
 const JOBS = LIVE_DATA.jobs.map(j => ({
   id: j.id, date: new Date(j.date), loc: j.loc, dept: j.dept, tech: j.tech,
   revenue: j.revenue, future: j.future, membershipSold: j.membershipSold,
@@ -439,7 +439,7 @@ const JOBS = LIVE_DATA.jobs.map(j => ({
 // Opportunities drive the Sales tab -- NOT raw estimates. A Good/Better/Best
 // presentation writes one estimate per option for what is a single sales
 // opportunity, so estimate counts overstate how many chances to sell there
-// really were. These are pre-grouped one-per-job by fetch_dashboard_data.py;
+// really were. These are pre-grouped one-per-job by fetch.py;
 // `options` records how many estimates were folded into each.
 const OPPORTUNITIES = LIVE_DATA.opportunities.map(o => ({
   id: o.id, loc: o.loc, dept: o.dept, won: !!o.won, options: o.options,
@@ -483,7 +483,7 @@ const PO_TOTALS = LIVE_DATA.poTotals || {};
 
 // Calls arrive pre-rolled-up: one row per (day, agent, campaign, direction)
 // carrying n / booked / abandoned counts. The dashboard only ever shows call
-// counts, so this is lossless -- see fetch_dashboard_data.py. Every consumer
+// counts, so this is lossless -- see fetch.py. Every consumer
 // must SUM c.n rather than counting rows.
 const CALLS = LIVE_DATA.calls.map(c => ({
   loc: c.loc, date: new Date(c.date + "T12:00:00"), // midday avoids UTC/local day-boundary drift
@@ -1621,7 +1621,7 @@ function targetCaption(){
     const b = document.createElement("div");
     b.className = "demo-banner";
     b.textContent = "DEMO DATA \u2014 these figures are randomly generated and describe no real business. "
-                  + "Connect ServiceTitan and run fetch_dashboard_data.py for live numbers.";
+                  + "Connect ServiceTitan and run `servicetitan fetch` for live numbers.";
     document.body.insertBefore(b, document.body.firstChild);
   }
 })();
