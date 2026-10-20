@@ -1,0 +1,24 @@
+# Credentials and local settings from the legacy layout. Never commit these.
+.env
+config.json
+
+# Generated data: real customer names, employee names and revenue figures.
+live_data.json
+demo_data.json
+dashboard.html
+*.snapshot.json
+
+# Brand assets (delete these lines in a PRIVATE repo if you want logos versioned).
+brand/logo-light.png
+brand/logo-dark.png
+
+# Python
+__pycache__/
+*.pyc
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.venv/
+venv/
+.DS_Store

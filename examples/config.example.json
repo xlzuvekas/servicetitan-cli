@@ -1,0 +1,46 @@
+{
+  "_comment": "Copy this file to config.json and edit it. config.json is gitignored so your settings never leave your machine. Nothing here is secret - credentials live in .env.",
+
+  "company": {
+    "name": "Acme Home Services",
+    "subtitle": "Operations Dashboard",
+    "locationsLabel": "Springfield, IL & Location 2"
+  },
+
+  "_locations": "One entry per ServiceTitan tenant. 'code' is a short id used internally and in the location toggle; keep it short and unique. 'env' is the suffix on that location's .env keys, so env 'SPRINGFIELD' reads SERVICETITAN_TENANT_ID_SPRINGFIELD, falling back to the unsuffixed SERVICETITAN_TENANT_ID when there is no suffixed one. A SINGLE-location shop can drop 'env' altogether and use the unsuffixed keys for all four credentials: [{ \"code\": \"MAIN\", \"label\": \"Main Office\" }]. With more than one location each needs its own 'env'. Either way the location toggle hides itself when there is only one.",
+  "locations": [
+    { "code": "SPR", "label": "Springfield", "env": "SPRINGFIELD" },
+    { "code": "LOC2", "label": "Location 2", "env": "LOCATION_2" }
+  ],
+
+  "_window": "How far back to pull. Leave operationalStart null to use Jan 1 of the current year. AR reaches back further so the 120+ aging bucket is real rather than truncated at the start of the year.",
+  "window": {
+    "operationalStart": null,
+    "arMonthsBack": 20
+  },
+
+  "_departmentMapping": "ServiceTitan business-unit names are matched against these keywords, case-insensitive, in the order listed. The FIRST list containing a matching keyword wins, so put the more specific keywords first. Business units matching an 'exclude' keyword are dropped entirely (warehouses and other internal units are not revenue-generating). Anything unmatched lands in 'Other' and is counted in company totals but not shown on the department tabs.",
+  "departmentMapping": {
+    "Install": ["install", "construction", "solar"],
+    "Sales": ["sales"],
+    "Service": ["service", "maint"],
+    "exclude": ["warehouse"]
+  },
+
+  "_targets": "Shown as target lines on the Service tab. Set to null to hide a target line rather than displaying one nobody agreed to.",
+  "targets": {
+    "avgTicket": 280,
+    "membershipAttachPct": 12,
+    "lowTicketPct": 10,
+    "optionsPerCall": 2.5
+  },
+
+  "_rules": "lowTicketThreshold: a completed call billing more than $0 but under this counts as a low ticket. boardDays: the rolling 'on the board' window on the department tabs.",
+  "rules": {
+    "lowTicketThreshold": 150,
+    "boardDays": 45
+  },
+
+  "_personAliases": "One person can hold several ServiceTitan user records. Records with the SAME name merge on their own - every per-person total is keyed by name. Only declare a duplicate here when the two records carry DIFFERENT names, and only once you have confirmed it really is one person: merging two differently-named records on a guess silently combines two people's numbers. Key is '<location code>:<ServiceTitan user id>', value is the canonical name. Run `servicetitan duplicates` to list likely candidates.",
+  "personAliases": {}
+}
